@@ -1,0 +1,273 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Montserrat:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary:       #8B0000;
+    --color-primary-dark:  #6B0000;
+    --color-primary-light: #A50000;
+    --color-accent:        #D4AF37;
+    --color-accent-light:  #E8C547;
+    --color-accent-dark:   #B8860B;
+    --color-bg:            #FDF6E3;
+    --color-bg-card:       #FFFFF0;
+    --color-text:          #2C1810;
+    --color-text-muted:    #8D6E63;
+    --color-border:        rgba(212, 175, 55, 0.35);
+    --color-border-strong: rgba(212, 175, 55, 0.65);
+    --font-heading: 'Playfair Display', Georgia, serif;
+    --font-body:    'Lora', Georgia, serif;
+    --font-sans:    'Montserrat', Inter, system-ui, sans-serif;
+  }
+
+  .dark {
+    --color-bg:            #1a0c08;
+    --color-bg-card:       #2d1610;
+    --color-text:          #FDF6E3;
+    --color-text-muted:    #a68878;
+    --color-border:        rgba(212, 175, 55, 0.2);
+    --color-border-strong: rgba(212, 175, 55, 0.45);
+  }
+
+  html {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23D4AF37' fill-opacity='0.04'%3E%3Ccircle cx='40' cy='40' r='2'/%3E%3Ccircle cx='0' cy='0' r='2'/%3E%3Ccircle cx='80' cy='0' r='2'/%3E%3Ccircle cx='0' cy='80' r='2'/%3E%3Ccircle cx='80' cy='80' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: var(--color-text);
+  }
+
+  p, span, label {
+    font-family: var(--font-body);
+  }
+
+  button, nav {
+    font-family: var(--font-sans);
+  }
+}
+
+/* Victorian Glass/Panel */
+.glass-panel {
+  background: rgba(253, 246, 227, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.dark .glass-panel {
+  background: rgba(45, 22, 16, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.18);
+}
+
+.glass-dropdown {
+  background: rgba(255, 255, 240, 0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+}
+
+.dark .glass-dropdown {
+  background: rgba(29, 10, 5, 0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+/* Gold Border */
+.gold-border {
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  box-shadow: inset 0 1px 0 rgba(232, 197, 71, 0.2), 0 1px 3px rgba(62, 39, 35, 0.1);
+}
+
+.gold-border-strong {
+  border: 1.5px solid rgba(201, 162, 39, 0.75);
+  box-shadow: inset 0 1px 0 rgba(232, 197, 71, 0.3), 0 2px 8px rgba(139, 0, 0, 0.1);
+}
+
+/* Victorian Card */
+.victorian-card {
+  background: linear-gradient(145deg, #FFFFF0 0%, #FDF6E3 100%);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 12px rgba(62, 39, 35, 0.08), inset 0 1px 0 rgba(232, 197, 71, 0.15);
+  transition: all 0.3s ease;
+}
+
+.dark .victorian-card {
+  background: linear-gradient(145deg, #2d1610 0%, #1a0c08 100%);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(212, 175, 55, 0.1);
+}
+
+.victorian-card:hover {
+  border-color: rgba(212, 175, 55, 0.65);
+  box-shadow: 0 8px 32px rgba(62, 39, 35, 0.12), 0 0 0 1px rgba(212, 175, 55, 0.2), inset 0 1px 0 rgba(232, 197, 71, 0.25);
+  transform: translateY(-2px);
+}
+
+/* Gradient Text */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #D4AF37 0%, #C9A227 30%, #E8C547 60%, #B8860B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-burgundy-gradient {
+  background: linear-gradient(135deg, #8B0000 0%, #A50000 50%, #6B0000 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Ornament Divider */
+.ornament-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #D4AF37;
+}
+
+.ornament-divider::before,
+.ornament-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.6), transparent);
+}
+
+/* Gold shimmer */
+.shimmer-gold {
+  background: linear-gradient(
+    110deg,
+    #D4AF37 0%,
+    #E8C547 30%,
+    #FFD700 50%,
+    #E8C547 70%,
+    #B8860B 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer 2.5s linear infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* Victorian Buttons */
+.btn-victorian-primary {
+  background: linear-gradient(135deg, #8B0000 0%, #A50000 50%, #8B0000 100%);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  color: #FDF6E3;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  box-shadow: 0 4px 16px rgba(139, 0, 0, 0.3), inset 0 1px 0 rgba(232, 197, 71, 0.2);
+  transition: all 0.25s ease;
+}
+
+.btn-victorian-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #A50000 0%, #C0392B 50%, #A50000 100%);
+  box-shadow: 0 6px 24px rgba(139, 0, 0, 0.4), inset 0 1px 0 rgba(232, 197, 71, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-victorian-gold {
+  background: linear-gradient(135deg, #C9A227 0%, #D4AF37 40%, #E8C547 60%, #C9A227 100%);
+  border: 1px solid rgba(184, 134, 11, 0.6);
+  color: #2C1810;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.25s ease;
+}
+
+.btn-victorian-gold:hover:not(:disabled) {
+  background: linear-gradient(135deg, #D4AF37 0%, #E8C547 40%, #FFD700 60%, #D4AF37 100%);
+  box-shadow: 0 6px 24px rgba(212, 175, 55, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Victorian Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(253, 246, 227, 0.5); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #C9A227, #B8860B);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #D4AF37, #C9A227);
+}
+
+/* AI Badge */
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #8B0000, #A50000);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  color: #D4AF37;
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(139, 0, 0, 0.3);
+}
+
+/* Victorian Pattern Overlay */
+.victorian-bg {
+  position: relative;
+}
+
+.victorian-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23D4AF37' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Gold accent line */
+.gold-accent-line {
+  width: 3rem;
+  height: 3px;
+  background: linear-gradient(90deg, #8B0000, #D4AF37, #8B0000);
+  border-radius: 2px;
+}
+
+/* Heading utilities */
+.heading-display {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.heading-section {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.25;
+}

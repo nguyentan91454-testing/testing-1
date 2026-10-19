@@ -1,0 +1,32 @@
+{
+  "name": "techstore-ecommerce",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready Full-Stack E-Commerce SPA with React, Node.js, Prisma, RBAC and AI Chatbot with Tool Calling",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"API,WEB\" -c \"cyan.bold,green.bold\" \"npm run dev --workspace=@techstore/api\" \"npm run dev --workspace=@techstore/web\"",
+    "dev:api": "npm run dev --workspace=@techstore/api",
+    "dev:web": "npm run dev --workspace=@techstore/web",
+    "build": "npm run build --workspace=@techstore/shared && npm run build --workspace=@techstore/api && npm run build --workspace=@techstore/web",
+    "build:shared": "npm run build --workspace=@techstore/shared",
+    "build:api": "npm run build --workspace=@techstore/api",
+    "build:web": "npm run build --workspace=@techstore/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:studio": "prisma studio"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prisma": "^6.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
