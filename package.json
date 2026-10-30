@@ -1,0 +1,16 @@
+{
+  "name": "home-decor-commerce",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.5.1",
+  "scripts": {
+    "dev:api": "pnpm --filter @commerce/api dev",
+    "build": "pnpm --filter @commerce/api build",
+    "typecheck": "pnpm --filter @commerce/api typecheck",
+    "test": "pnpm --filter @commerce/api test",
+    "db:generate": "pnpm --filter @commerce/api db:generate",
+    "db:migrate": "pnpm --filter @commerce/api db:migrate",
+    "db:seed": "pnpm --filter @commerce/api db:seed"
+  }
+}
+
