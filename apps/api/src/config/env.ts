@@ -21,6 +21,8 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().default(""),
   GOOGLE_CLIENT_SECRET: z.string().default(""),
   GOOGLE_REDIRECT_URI: z.string().default(""),
+  RESEND_API_KEY: z.string().default(""),
+  EMAIL_FROM: z.string().default("Home & Decor <onboarding@resend.dev>"),
 });
 
 export const env = envSchema.parse(process.env);

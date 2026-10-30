@@ -5,9 +5,16 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { startReservationWorker } from "./modules/orders/reservation-worker.js";
+import { startEmailWorker } from "./modules/email/email.service.js";
 
 async function start() {
   const boss: PgBoss = await startReservationWorker();
+  try {
+    await startEmailWorker(boss);
+  } catch (error) {
+    await boss.stop();
+    throw error;
+  }
   const server: Server = app.listen(env.API_PORT, () => {
     logger.info({ port: env.API_PORT }, "API server started");
   });

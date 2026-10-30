@@ -3,6 +3,7 @@ import { PgBoss } from "pg-boss";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { notifyEmailWorker, recordOrderEmail } from "../email/email.service.js";
 
 const queueName = "expire-order-reservations";
 
@@ -24,7 +25,7 @@ export async function expireExpiredReservations(now = new Date()): Promise<numbe
       paymentStatus: "DEPOSIT_PENDING",
       reservationExpiresAt: { lte: now },
     },
-    select: { id: true, reservationExpiresAt: true, orderStatus: true, paymentStatus: true },
+    select: { id: true, email: true, reservationExpiresAt: true, orderStatus: true, paymentStatus: true },
     orderBy: { reservationExpiresAt: "asc" },
     take: 100,
   });
@@ -42,7 +43,7 @@ export async function expireExpiredReservations(now = new Date()): Promise<numbe
         },
         data: { orderStatus: "CANCELLED", paymentStatus: "EXPIRED" },
       });
-      if (changed.count !== 1) return false;
+      if (changed.count !== 1) return { expired: false, emailLogId: null };
 
       const items = await tx.orderItem.findMany({ where: { orderId: candidate.id }, select: { variantId: true, quantity: true } });
       for (const item of items) {
@@ -60,9 +61,13 @@ export async function expireExpiredReservations(now = new Date()): Promise<numbe
           payload: { paymentStatus: "EXPIRED", stockRestored: items.length },
         },
       });
-      return true;
+      const emailLogId = await recordOrderEmail(tx, candidate.id, "ORDER_CANCELLED", candidate.email);
+      return { expired: true, emailLogId };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    if (expired) expiredCount += 1;
+    if (expired.expired) {
+      expiredCount += 1;
+      if (expired.emailLogId) await notifyEmailWorker(expired.emailLogId);
+    }
   }
   return expiredCount;
 }

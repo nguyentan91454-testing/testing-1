@@ -1,6 +1,7 @@
 import type { OrderStatus as DbOrderStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { assertOrderTransition, type OrderStatus, type PaymentStatus } from "./order-state.js";
+import { notifyEmailWorker, recordOrderEmail } from "../email/email.service.js";
 
 export async function transitionOrderStatus(input: {
   orderId: string;
@@ -8,7 +9,7 @@ export async function transitionOrderStatus(input: {
   actor: string;
   reasonCode?: string;
 }) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUniqueOrThrow({ where: { id: input.orderId } });
     assertOrderTransition({
       orderStatus: order.orderStatus as OrderStatus,
@@ -36,7 +37,11 @@ export async function transitionOrderStatus(input: {
         ...(input.reasonCode === undefined ? {} : { payload: { reasonCode: input.reasonCode } }),
       },
     });
-    return tx.order.findUniqueOrThrow({ where: { id: input.orderId } });
+    const emailType = input.nextStatus === "SHIPPED" ? "ORDER_SHIPPED" : input.nextStatus === "CANCELLED" ? "ORDER_CANCELLED" : null;
+    const emailLogId = emailType ? await recordOrderEmail(tx, order.id, emailType, order.email) : null;
+    return { order: await tx.order.findUniqueOrThrow({ where: { id: input.orderId } }), emailLogId };
   });
+  if (result.emailLogId) await notifyEmailWorker(result.emailLogId);
+  return result.order;
 }
 

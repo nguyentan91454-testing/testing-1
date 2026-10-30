@@ -8,6 +8,7 @@ import { optionalCustomer } from "../../http/customer-auth.js";
 import { calculatePrice } from "../pricing/pricing.js";
 import { couponDiscount, couponIdentityHashes } from "../pricing/coupon.js";
 import { buildMockVietQr, getMockPaymentStatus } from "./mock-payment.js";
+import { notifyEmailWorker, recordOrderEmail } from "../email/email.service.js";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
@@ -36,7 +37,7 @@ checkoutRouter.post("/:orderId/pay-mock", async (request, response, next) => {
       if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND");
       const payment = await tx.payment.findFirst({ where: { orderId, provider: "MOCK" }, orderBy: { createdAt: "desc" } });
       if (!payment) throw new HttpError(409, "Đơn hàng không có khoản thanh toán demo", "MOCK_PAYMENT_NOT_FOUND");
-      if (payment.status === "SUCCEEDED") return { order, alreadyProcessed: true };
+      if (payment.status === "SUCCEEDED") return { order, alreadyProcessed: true, emailLogId: null };
       if (payment.status !== "PENDING" || order.paymentStatus !== "DEPOSIT_PENDING" || order.orderStatus !== "PENDING") {
         throw new HttpError(409, "Khoản thanh toán không còn chờ xác nhận", "MOCK_PAYMENT_NOT_PENDING");
       }
@@ -48,8 +49,10 @@ checkoutRouter.post("/:orderId/pay-mock", async (request, response, next) => {
       const changedOrder = await tx.order.updateMany({ where: { id: order.id, paymentStatus: "DEPOSIT_PENDING", orderStatus: "PENDING" }, data: { paidVnd, paymentStatus } });
       if (changedOrder.count !== 1) throw new HttpError(409, "Đơn hàng vừa thay đổi, vui lòng tải lại", "ORDER_CHANGED");
       await tx.orderEvent.create({ data: { orderId, type: "MOCK_PAYMENT_CONFIRMED", actor: "mock-payment", payload: { paymentId: payment.id, amountVnd: payment.amountVnd } } });
-      return { order: { ...order, paidVnd, paymentStatus }, alreadyProcessed: false };
+      const emailLogId = await recordOrderEmail(tx, orderId, "PAYMENT_RECEIVED", order.email);
+      return { order: { ...order, paidVnd, paymentStatus }, alreadyProcessed: false, emailLogId };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    if (result.emailLogId) await notifyEmailWorker(result.emailLogId);
     response.json({ success: true, data: { id: result.order.id, code: result.order.code, paidVnd: result.order.paidVnd, paymentStatus: result.order.paymentStatus, orderStatus: result.order.orderStatus, alreadyProcessed: result.alreadyProcessed } });
   } catch (error) { next(error); }
 });
@@ -228,12 +231,14 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
         } });
       }
       await tx.orderEvent.create({ data: { orderId: created.id, type: "CHECKOUT_CREATED", toStatus: "PENDING", actor: "customer" } });
+      const emailLogId = await recordOrderEmail(tx, created.id, "ORDER_CONFIRMATION", created.email);
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.update({ where: { id: cart.id }, data: { couponId: null } });
-      return { order: created, payment: createdPayment };
+      return { order: created, payment: createdPayment, emailLogId };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     const { order: createdOrder, payment: createdPayment } = order;
+    await notifyEmailWorker(order.emailLogId);
     response.status(201).json({
       success: true,
       data: { id: createdOrder.id, code: createdOrder.code, totalVnd: createdOrder.totalVnd, paymentStatus: createdOrder.paymentStatus, orderStatus: createdOrder.orderStatus, codAmountVnd: createdOrder.codAmountVnd, depositRequiredVnd: createdOrder.depositRequiredVnd, payment: checkoutPayment(createdOrder.code, createdPayment), isDemo: true },
