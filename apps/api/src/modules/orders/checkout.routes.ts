@@ -5,6 +5,7 @@ import { z } from "zod";
 import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { calculatePrice } from "../pricing/pricing.js";
+import { couponDiscount, couponIdentityHashes } from "../pricing/coupon.js";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
@@ -53,7 +54,7 @@ checkoutRouter.post("/", async (request, response, next) => {
 
     const normalizedPhone = normalizePhone(input.phone);
     const order = await prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.findFirst({ where: { sessionId } });
+      const cart = await tx.cart.findFirst({ where: { sessionId }, include: { coupon: true } });
       if (!cart) throw new HttpError(400, "Giỏ hàng đang trống", "CART_EMPTY");
       const items = await tx.cartItem.findMany({
         where: { cartId: cart.id },
@@ -81,12 +82,31 @@ checkoutRouter.post("/", async (request, response, next) => {
         quantity: item.quantity,
       }));
       const subtotalVnd = lines.reduce((sum, line) => sum + line.priceVnd * line.quantity, 0);
+      let coupon = cart.couponId ? await tx.coupon.findUnique({ where: { id: cart.couponId } }) : null;
+      let couponHashes: ReturnType<typeof couponIdentityHashes> | null = null;
+      if (cart.couponId) {
+        const now = new Date();
+        if (!coupon || !coupon.isActive || coupon.startsAt > now || coupon.endsAt <= now) throw new HttpError(400, "Mã giảm giá không hợp lệ hoặc đã hết hạn", "COUPON_INVALID");
+        if (subtotalVnd < coupon.minOrderVnd) throw new HttpError(400, "Giá trị đơn hàng chưa đạt mức tối thiểu của mã giảm giá", "COUPON_MIN_ORDER");
+        couponHashes = couponIdentityHashes({ phone: normalizedPhone, address: `${input.province}|${input.ward}|${input.addressDetail}` });
+        const previousCustomerOrder = await tx.order.findFirst({ where: { OR: [
+          { phone: normalizedPhone },
+          { province: { equals: input.province, mode: "insensitive" }, ward: { equals: input.ward, mode: "insensitive" }, addressDetail: { equals: input.addressDetail, mode: "insensitive" } },
+        ] }, select: { id: true } });
+        if (coupon.newCustomerOnly && previousCustomerOrder) throw new HttpError(400, "Mã này chỉ áp dụng cho khách hàng mới", "COUPON_NEW_CUSTOMER_ONLY");
+        const redemptions = await tx.couponRedemption.count({ where: { couponId: coupon.id, OR: [
+          { phoneHash: couponHashes.phoneHash }, { addressHash: couponHashes.addressHash },
+        ] } });
+        if (coupon.perUserLimit <= redemptions) throw new HttpError(400, "Bạn đã sử dụng hết lượt của mã giảm giá này", "COUPON_USER_LIMIT_REACHED");
+        const totalRedemptions = await tx.couponRedemption.count({ where: { couponId: coupon.id } });
+        if (coupon.totalLimit !== null && totalRedemptions >= coupon.totalLimit) throw new HttpError(400, "Mã giảm giá đã hết lượt sử dụng", "COUPON_LIMIT_REACHED");
+      }
       const price = calculatePrice({
         subtotalVnd,
         shippingFeeGrossVnd: policy.shippingFeeVnd,
         freeShippingThresholdVnd: policy.freeShippingThresholdVnd,
         shippingSubsidyCapVnd: policy.shippingSubsidyCapVnd,
-        discount: null,
+        discount: coupon ? couponDiscount(coupon) : null,
       });
       const risk = await tx.customerRisk.findUnique({ where: { phone: normalizedPhone } });
       const highRisk = (risk?.returnedCount ?? 0) > 0 || (risk?.boomCount ?? 0) > 0;
@@ -126,6 +146,7 @@ checkoutRouter.post("/", async (request, response, next) => {
           shippingFeeCustomerVnd: price.shippingFeeCustomerVnd,
           shippingSubsidyVnd: price.shippingSubsidyVnd,
           totalVnd,
+          couponId: coupon?.id ?? null,
           depositRequiredVnd: requiredPaymentVnd,
           paidVnd: 0,
           codAmountVnd: totalVnd - requiredPaymentVnd,
@@ -146,6 +167,16 @@ checkoutRouter.post("/", async (request, response, next) => {
         unitPriceVnd: line.priceVnd,
         quantity: line.quantity,
       })) });
+      if (coupon && couponHashes) {
+        await tx.couponRedemption.create({ data: {
+          couponId: coupon.id,
+          orderId: created.id,
+          phone: normalizedPhone,
+          phoneHash: couponHashes.phoneHash,
+          addressHash: couponHashes.addressHash,
+          isNewCustomer: coupon.newCustomerOnly,
+        } });
+      }
       if (requiredPaymentVnd > 0) {
         await tx.payment.create({ data: {
           orderId: created.id,
@@ -157,6 +188,7 @@ checkoutRouter.post("/", async (request, response, next) => {
       }
       await tx.orderEvent.create({ data: { orderId: created.id, type: "CHECKOUT_CREATED", toStatus: "PENDING", actor: "customer" } });
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+      await tx.cart.update({ where: { id: cart.id }, data: { couponId: null } });
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 

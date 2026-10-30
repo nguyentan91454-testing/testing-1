@@ -5,6 +5,7 @@ import { env } from "../../config/env.js";
 import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { calculatePrice } from "../pricing/pricing.js";
+import { couponDiscount, normalizeCouponCode } from "../pricing/coupon.js";
 
 const cookieName = "cart_session";
 const cartCookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "lax" as const, path: "/api/v1", maxAge: 30 * 24 * 60 * 60 * 1000 };
@@ -24,6 +25,7 @@ async function getCart(request: Parameters<Parameters<typeof cartRouter.get>[1]>
 }
 
 async function readCart(cartId: string) {
+  const cart = await prisma.cart.findUnique({ where: { id: cartId }, include: { coupon: true } });
   const items = await prisma.cartItem.findMany({
     where: { cartId },
     include: { variant: { include: { product: { include: { images: { orderBy: { sortOrder: "asc" }, take: 1 } } }, options: { include: { value: true } } } } },
@@ -31,8 +33,10 @@ async function readCart(cartId: string) {
   });
   const variantItems = items.filter((item) => item.variant !== null);
   const subtotalVnd = variantItems.reduce((sum, item) => sum + item.variant!.priceVnd * item.quantity, 0);
-  const price = calculatePrice({ subtotalVnd, shippingFeeGrossVnd: 0, freeShippingThresholdVnd: null, shippingSubsidyCapVnd: null, discount: null });
+  const coupon = cart?.coupon && !cart.coupon.newCustomerOnly && cart.coupon.isActive && cart.coupon.startsAt <= new Date() && cart.coupon.endsAt > new Date() ? cart.coupon : null;
+  const price = calculatePrice({ subtotalVnd, shippingFeeGrossVnd: 0, freeShippingThresholdVnd: null, shippingSubsidyCapVnd: null, discount: coupon ? couponDiscount(coupon) : null });
   return {
+    coupon: cart?.coupon ? { code: cart.coupon.code, discountVnd: price.discountVnd, requiresCheckoutValidation: cart.coupon.newCustomerOnly } : null,
     items: variantItems.map((item) => ({
       id: item.id,
       variantId: item.variantId,
@@ -52,6 +56,31 @@ async function readCart(cartId: string) {
 cartRouter.get("/", async (request, response, next) => {
   try {
     const cart = await getCart(request, response);
+    response.json({ success: true, data: await readCart(cart.id) });
+  } catch (error) { next(error); }
+});
+
+cartRouter.post("/coupon", async (request, response, next) => {
+  try {
+    const { code } = z.object({ code: z.string().trim().min(1).max(64) }).parse(request.body);
+    const normalizedCode = normalizeCouponCode(code);
+    const cart = await getCart(request, response);
+    const items = await prisma.cartItem.findMany({ where: { cartId: cart.id, variantId: { not: null } }, include: { variant: true } });
+    const subtotalVnd = items.reduce((sum, item) => sum + (item.variant?.priceVnd ?? 0) * item.quantity, 0);
+    const coupon = await prisma.coupon.findUnique({ where: { code: normalizedCode } });
+    const now = new Date();
+    if (!coupon || !coupon.isActive || coupon.startsAt > now || coupon.endsAt <= now) throw new HttpError(400, "Mã giảm giá không hợp lệ hoặc đã hết hạn", "COUPON_INVALID");
+    if (subtotalVnd < coupon.minOrderVnd) throw new HttpError(400, "Giá trị đơn hàng chưa đạt mức tối thiểu của mã giảm giá", "COUPON_MIN_ORDER");
+    if (coupon.totalLimit !== null && await prisma.couponRedemption.count({ where: { couponId: coupon.id } }) >= coupon.totalLimit) throw new HttpError(400, "Mã giảm giá đã hết lượt sử dụng", "COUPON_LIMIT_REACHED");
+    await prisma.cart.update({ where: { id: cart.id }, data: { couponId: coupon.id } });
+    response.json({ success: true, data: await readCart(cart.id) });
+  } catch (error) { next(error); }
+});
+
+cartRouter.delete("/coupon", async (request, response, next) => {
+  try {
+    const cart = await getCart(request, response);
+    await prisma.cart.update({ where: { id: cart.id }, data: { couponId: null } });
     response.json({ success: true, data: await readCart(cart.id) });
   } catch (error) { next(error); }
 });
