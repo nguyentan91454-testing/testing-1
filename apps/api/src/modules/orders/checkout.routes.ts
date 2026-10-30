@@ -6,6 +6,7 @@ import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { calculatePrice } from "../pricing/pricing.js";
 import { couponDiscount, couponIdentityHashes } from "../pricing/coupon.js";
+import { buildMockVietQr, getMockPaymentStatus } from "./mock-payment.js";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
@@ -16,6 +17,40 @@ const checkoutSchema = z.object({
   addressDetail: z.string().trim().min(5).max(300),
   paymentMethod: z.enum(["COD", "VIETQR"]),
   note: z.string().trim().max(1000).optional(),
+});
+
+export const checkoutRouter = Router();
+
+function checkoutPayment(orderCode: string, payment: { id: string; type: "FULL" | "DEPOSIT" | "COD"; amountVnd: number; status: "PENDING" | "SUCCEEDED" | "FAILED" } | null) {
+  if (!payment || payment.status !== "PENDING") return null;
+  return { id: payment.id, type: payment.type, amountVnd: payment.amountVnd, provider: "MOCK", qr: buildMockVietQr(orderCode, payment.amountVnd) };
+}
+
+checkoutRouter.post("/:orderId/pay-mock", async (request, response, next) => {
+  try {
+    if (process.env.NODE_ENV === "production") throw new HttpError(404, "Không tìm thấy tài nguyên", "NOT_FOUND");
+    const { orderId } = z.object({ orderId: z.string().uuid() }).parse(request.params);
+    const result = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND");
+      const payment = await tx.payment.findFirst({ where: { orderId, provider: "MOCK" }, orderBy: { createdAt: "desc" } });
+      if (!payment) throw new HttpError(409, "Đơn hàng không có khoản thanh toán demo", "MOCK_PAYMENT_NOT_FOUND");
+      if (payment.status === "SUCCEEDED") return { order, alreadyProcessed: true };
+      if (payment.status !== "PENDING" || order.paymentStatus !== "DEPOSIT_PENDING" || order.orderStatus !== "PENDING") {
+        throw new HttpError(409, "Khoản thanh toán không còn chờ xác nhận", "MOCK_PAYMENT_NOT_PENDING");
+      }
+      if (order.reservationExpiresAt && order.reservationExpiresAt <= new Date()) throw new HttpError(409, "Thời hạn thanh toán của đơn đã hết", "PAYMENT_RESERVATION_EXPIRED");
+      const paidVnd = order.paidVnd + payment.amountVnd;
+      const paymentStatus = getMockPaymentStatus(order.totalVnd, order.paidVnd, payment.amountVnd);
+      const changedPayment = await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "SUCCEEDED", providerTxnId: `MOCK-${payment.id}` } });
+      if (changedPayment.count !== 1) throw new HttpError(409, "Khoản thanh toán vừa được xử lý", "MOCK_PAYMENT_ALREADY_PROCESSED");
+      const changedOrder = await tx.order.updateMany({ where: { id: order.id, paymentStatus: "DEPOSIT_PENDING", orderStatus: "PENDING" }, data: { paidVnd, paymentStatus } });
+      if (changedOrder.count !== 1) throw new HttpError(409, "Đơn hàng vừa thay đổi, vui lòng tải lại", "ORDER_CHANGED");
+      await tx.orderEvent.create({ data: { orderId, type: "MOCK_PAYMENT_CONFIRMED", actor: "mock-payment", payload: { paymentId: payment.id, amountVnd: payment.amountVnd } } });
+      return { order: { ...order, paidVnd, paymentStatus }, alreadyProcessed: false };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    response.json({ success: true, data: { id: result.order.id, code: result.order.code, paidVnd: result.order.paidVnd, paymentStatus: result.order.paymentStatus, orderStatus: result.order.orderStatus, alreadyProcessed: result.alreadyProcessed } });
+  } catch (error) { next(error); }
 });
 
 const checkoutPolicySchema = z.object({
@@ -37,8 +72,6 @@ const normalizePhone = (value: string) => {
 };
 const orderCode = () => `DEMO-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
 
-export const checkoutRouter = Router();
-
 checkoutRouter.post("/", async (request, response, next) => {
   try {
     const input = checkoutSchema.parse(request.body);
@@ -46,8 +79,9 @@ checkoutRouter.post("/", async (request, response, next) => {
     const sessionId = request.cookies?.[cartCookie] as string | undefined;
     if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) throw new HttpError(400, "Giỏ hàng không hợp lệ", "CART_SESSION_REQUIRED");
 
-    const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true } });
+    const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
     if (previous) {
+      Object.assign(previous, { payment: checkoutPayment(previous.code, previous.payments[0] ?? null) });
       response.status(200).json({ success: true, data: previous, message: "Đơn đã được tạo trước đó" });
       return;
     }
@@ -177,8 +211,9 @@ checkoutRouter.post("/", async (request, response, next) => {
           isNewCustomer: coupon.newCustomerOnly,
         } });
       }
+      let createdPayment = null;
       if (requiredPaymentVnd > 0) {
-        await tx.payment.create({ data: {
+        createdPayment = await tx.payment.create({ data: {
           orderId: created.id,
           provider: "MOCK",
           type: requiredPaymentVnd === totalVnd ? "FULL" : "DEPOSIT",
@@ -189,20 +224,21 @@ checkoutRouter.post("/", async (request, response, next) => {
       await tx.orderEvent.create({ data: { orderId: created.id, type: "CHECKOUT_CREATED", toStatus: "PENDING", actor: "customer" } });
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.update({ where: { id: cart.id }, data: { couponId: null } });
-      return created;
+      return { order: created, payment: createdPayment };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
+    const { order: createdOrder, payment: createdPayment } = order;
     response.status(201).json({
       success: true,
-      data: { id: order.id, code: order.code, totalVnd: order.totalVnd, paymentStatus: order.paymentStatus, orderStatus: order.orderStatus, codAmountVnd: order.codAmountVnd, depositRequiredVnd: order.depositRequiredVnd, isDemo: true },
+      data: { id: createdOrder.id, code: createdOrder.code, totalVnd: createdOrder.totalVnd, paymentStatus: createdOrder.paymentStatus, orderStatus: createdOrder.orderStatus, codAmountVnd: createdOrder.codAmountVnd, depositRequiredVnd: createdOrder.depositRequiredVnd, payment: checkoutPayment(createdOrder.code, createdPayment), isDemo: true },
       message: "Đơn hàng demo đã được tạo",
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const idempotencyKey = request.get("idempotency-key");
       if (idempotencyKey) {
-        const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true } });
-        if (previous) { response.status(200).json({ success: true, data: previous }); return; }
+        const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
+        if (previous) { response.status(200).json({ success: true, data: { ...previous, payment: checkoutPayment(previous.code, previous.payments[0] ?? null) } }); return; }
       }
     }
     next(error);
