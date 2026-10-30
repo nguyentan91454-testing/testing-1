@@ -10,6 +10,7 @@ import { logger } from "./lib/logger.js";
 import { healthRouter } from "./routes/health.js";
 import { catalogRouter } from "./modules/catalog/catalog.routes.js";
 import { adminAuthRouter } from "./modules/auth/auth.routes.js";
+import { customerAuthRouter } from "./modules/auth/customer-auth.routes.js";
 import { cartRouter } from "./modules/cart/cart.routes.js";
 import { checkoutRouter } from "./modules/orders/checkout.routes.js";
 import { adminRouter } from "./modules/admin/admin.routes.js";
@@ -21,11 +22,23 @@ app.use(helmet());
 app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json({ limit: "32kb" }));
 app.use(cookieParser());
-app.use(pinoHttp({ logger, genReqId: (request) => request.headers["x-request-id"]?.toString() ?? crypto.randomUUID() }));
+app.use(pinoHttp({
+  logger,
+  genReqId: (request) => request.headers["x-request-id"]?.toString() ?? crypto.randomUUID(),
+  serializers: {
+    req: (request) => ({
+      id: request.id,
+      method: request.method,
+      url: request.url?.split("?", 1)[0],
+      remoteAddress: request.socket.remoteAddress,
+    }),
+  },
+}));
 app.use(rateLimit({ windowMs: 60_000, limit: 100, standardHeaders: "draft-8", legacyHeaders: false }));
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/products", catalogRouter);
 app.use("/api/v1/admin/auth", adminAuthRouter);
+app.use("/api/v1/auth", customerAuthRouter);
 app.use("/api/v1/cart", cartRouter);
 app.use("/api/v1/orders", checkoutRouter);
 app.use("/api/v1/admin", adminRouter);

@@ -17,6 +17,10 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional().default(""),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
+  API_BASE_URL: z.string().url().default("http://localhost:4000"),
+  GOOGLE_CLIENT_ID: z.string().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().default(""),
+  GOOGLE_REDIRECT_URI: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

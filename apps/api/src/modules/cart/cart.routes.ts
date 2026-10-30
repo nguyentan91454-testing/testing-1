@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { HttpError } from "../../http/errors.js";
+import { optionalCustomer } from "../../http/customer-auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { calculatePrice } from "../pricing/pricing.js";
 import { couponDiscount, normalizeCouponCode } from "../pricing/coupon.js";
@@ -12,6 +13,7 @@ const cartCookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production
 const itemSchema = z.object({ variantId: z.string().uuid(), quantity: z.number().int().min(1).max(10) });
 
 export const cartRouter = Router();
+cartRouter.use(optionalCustomer);
 
 async function getCart(request: Parameters<Parameters<typeof cartRouter.get>[1]>[0], response: Parameters<Parameters<typeof cartRouter.get>[1]>[1]) {
   let sessionId = request.cookies?.[cookieName] as string | undefined;
@@ -20,7 +22,8 @@ async function getCart(request: Parameters<Parameters<typeof cartRouter.get>[1]>
     response.cookie(cookieName, sessionId, cartCookieOptions);
   }
   let cart = await prisma.cart.findFirst({ where: { sessionId } });
-  if (!cart) cart = await prisma.cart.create({ data: { sessionId } });
+  if (!cart) cart = await prisma.cart.create({ data: { sessionId, userId: request.customer?.id ?? null } });
+  else if (request.customer && cart.userId !== request.customer.id) cart = await prisma.cart.update({ where: { id: cart.id }, data: { userId: request.customer.id } });
   return cart;
 }
 

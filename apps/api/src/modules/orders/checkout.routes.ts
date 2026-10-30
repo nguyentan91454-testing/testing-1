@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { optionalCustomer } from "../../http/customer-auth.js";
 import { calculatePrice } from "../pricing/pricing.js";
 import { couponDiscount, couponIdentityHashes } from "../pricing/coupon.js";
 import { buildMockVietQr, getMockPaymentStatus } from "./mock-payment.js";
@@ -72,7 +73,7 @@ const normalizePhone = (value: string) => {
 };
 const orderCode = () => `DEMO-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
 
-checkoutRouter.post("/", async (request, response, next) => {
+checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
   try {
     const input = checkoutSchema.parse(request.body);
     const idempotencyKey = z.string().uuid().parse(request.get("idempotency-key"));
@@ -128,9 +129,12 @@ checkoutRouter.post("/", async (request, response, next) => {
           { province: { equals: input.province, mode: "insensitive" }, ward: { equals: input.ward, mode: "insensitive" }, addressDetail: { equals: input.addressDetail, mode: "insensitive" } },
         ] }, select: { id: true } });
         if (coupon.newCustomerOnly && previousCustomerOrder) throw new HttpError(400, "Mã này chỉ áp dụng cho khách hàng mới", "COUPON_NEW_CUSTOMER_ONLY");
-        const redemptions = await tx.couponRedemption.count({ where: { couponId: coupon.id, OR: [
-          { phoneHash: couponHashes.phoneHash }, { addressHash: couponHashes.addressHash },
-        ] } });
+        const identityLimits = [
+          { phoneHash: couponHashes.phoneHash },
+          { addressHash: couponHashes.addressHash },
+          ...(request.customer ? [{ userId: request.customer.id }] : []),
+        ];
+        const redemptions = await tx.couponRedemption.count({ where: { couponId: coupon.id, OR: identityLimits } });
         if (coupon.perUserLimit <= redemptions) throw new HttpError(400, "Bạn đã sử dụng hết lượt của mã giảm giá này", "COUPON_USER_LIMIT_REACHED");
         const totalRedemptions = await tx.couponRedemption.count({ where: { couponId: coupon.id } });
         if (coupon.totalLimit !== null && totalRedemptions >= coupon.totalLimit) throw new HttpError(400, "Mã giảm giá đã hết lượt sử dụng", "COUPON_LIMIT_REACHED");
@@ -168,6 +172,7 @@ checkoutRouter.post("/", async (request, response, next) => {
         data: {
           code,
           idempotencyKey,
+          userId: request.customer?.id ?? null,
           customerName: input.customerName,
           phone: normalizedPhone,
           email: input.email.toLowerCase(),
@@ -205,6 +210,7 @@ checkoutRouter.post("/", async (request, response, next) => {
         await tx.couponRedemption.create({ data: {
           couponId: coupon.id,
           orderId: created.id,
+          userId: request.customer?.id ?? null,
           phone: normalizedPhone,
           phoneHash: couponHashes.phoneHash,
           addressHash: couponHashes.addressHash,

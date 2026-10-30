@@ -23,6 +23,7 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
+    "google-auth-library": "^11.3.2",
     "helmet": "^8.1.0",
     "jose": "^6.2.14",
     "pg-boss": "^12.38.0",
