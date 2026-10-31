@@ -11,6 +11,7 @@
 - Giỏ khách vãng lai: `GET/POST/PATCH/DELETE /api/v1/cart` với session cookie HttpOnly; giá luôn lấy từ DB.
 - Checkout demo: `POST /api/v1/orders`, cần header `Idempotency-Key`; kiểm tra tồn kho và tạo snapshot đơn trong transaction.
 - Admin riêng: `POST /api/v1/admin/auth/login`, `POST /api/v1/admin/auth/logout`, `GET /api/v1/admin/auth/me`; xem/chuyển trạng thái đơn qua `/api/v1/admin/orders`. Mọi route Admin cần session cookie và quyền kiểm tra tại API.
+- Admin đơn hàng: xem chi tiết qua `GET /api/v1/admin/orders/:orderId` (items, payments, shipment, timeline, ghi chú, khiếu nại, email logs); thêm ghi chú nội bộ qua `POST /api/v1/admin/orders/:orderId/notes`. Admin contact requests tại `GET /api/v1/admin/chatbot/contact-requests` và đổi trạng thái qua `PATCH /api/v1/admin/chatbot/contact-requests/:requestId`.
 - Health endpoints: `/api/v1/health/live` và `/api/v1/health/ready`.
 - Lighting calculator dùng chung web và bot: `GET /api/v1/lighting/room-types`, `POST /api/v1/lighting/calculate`.
 - Chatbot: `POST /api/v1/chat/messages`, `POST /api/v1/chat/session/reset`, gửi phản hồi qua `PATCH /api/v1/chat/messages/:messageId/feedback`. Phiên chat lưu bằng cookie HttpOnly; tra đơn khách cần `orderVerification` gồm mã đơn và 4 số cuối điện thoại, còn tên/số điện thoại liên hệ gửi riêng trong `contactDetails` để không đưa vào prompt AI.
