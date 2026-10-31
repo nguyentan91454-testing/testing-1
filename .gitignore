@@ -8,4 +8,5 @@ coverage/
 .next/
 apps/api/generated/
 *.log
+*.tsbuildinfo
 

@@ -33,7 +33,7 @@ app.use(pinoHttp({
       id: request.id,
       method: request.method,
       url: request.url?.split("?", 1)[0],
-      remoteAddress: request.socket.remoteAddress,
+      remoteAddress: request.remoteAddress,
     }),
   },
 }));

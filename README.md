@@ -2,6 +2,17 @@
 
 Public menu filters: `GET /api/v1/categories` (active categories only), `GET /api/v1/spaces`, and `GET /api/v1/styles`; all are sorted by `sortOrder`, then `name`.
 
+## Frontend
+
+The mobile-first React storefront lives in `apps/web`. It includes home discovery by room and style, catalog filters, product detail, cart, demo checkout, lighting calculator, and an API-backed consultation chat.
+
+```powershell
+pnpm dev:api
+pnpm dev:web
+```
+
+Vite runs at `http://localhost:5173` and proxies `/api` to the API at `http://localhost:4000`. Demo catalog data is loaded from the database; run `pnpm db:seed` to populate the sample catalog.
+
 Đồ án thương mại điện tử đồ gia dụng và trang trí. Toàn bộ đơn và thanh toán hiện ở chế độ demo; không nhận tiền thật.
 
 ## Backend hiện có

@@ -77,6 +77,7 @@ export async function startReservationWorker(): Promise<PgBoss> {
   boss.on("error", (error) => logger.error({ err: error }, "pg-boss error"));
   boss.on("warning", (warning) => logger.warn({ warning }, "pg-boss warning"));
   await boss.start();
+  await boss.createQueue(queueName, { policy: "standard" });
   await boss.work(queueName, { batchSize: 1 }, async (jobs) => {
     const expiredCount = await expireExpiredReservations();
     logger.info({ jobId: jobs[0]?.id, expiredCount }, "Expired order reservations processed");

@@ -4,9 +4,11 @@
   "private": true,
   "packageManager": "pnpm@12.5.1",
   "scripts": {
+    "dev:web": "pnpm --filter @commerce/web dev",
     "dev:api": "pnpm --filter @commerce/api dev",
-    "build": "pnpm --filter @commerce/api build",
-    "typecheck": "pnpm --filter @commerce/api typecheck",
+    "build:web": "pnpm --filter @commerce/web build",
+    "build": "pnpm --filter @commerce/api build && pnpm --filter @commerce/web build",
+    "typecheck": "pnpm --filter @commerce/api typecheck && pnpm --filter @commerce/web typecheck",
     "test": "pnpm --filter @commerce/api test",
     "db:generate": "pnpm --filter @commerce/api db:generate",
     "db:migrate": "pnpm --filter @commerce/api db:migrate",
