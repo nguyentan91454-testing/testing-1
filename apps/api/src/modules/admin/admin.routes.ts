@@ -13,6 +13,7 @@ import { adminReportsRouter } from "./admin.reports.routes.js";
 import { lightingAdminRouter } from "../lighting/lighting.admin.routes.js";
 import { chatbotAdminRouter } from "../chatbot/chatbot.admin.routes.js";
 import { adminOrderNotesRouter } from "./admin.order-notes.routes.js";
+import { adminShippingRouter } from "./admin.shipping.routes.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -23,6 +24,7 @@ adminRouter.use("/reports", adminReportsRouter);
 adminRouter.use(lightingAdminRouter);
 adminRouter.use(chatbotAdminRouter);
 adminRouter.use(adminOrderNotesRouter);
+adminRouter.use(adminShippingRouter);
 
 adminRouter.get("/orders", async (request, response, next) => {
   try {
