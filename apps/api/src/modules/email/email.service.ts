@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { renderOrderEmail, type OrderEmailType } from "./email.templates.js";
+import { createOrderTrackingToken, matchesOrderTrackingToken } from "../orders/mock-payment.js";
 
 const queueName = "send-order-emails";
 const emailTypeSchema = z.enum(["ORDER_CONFIRMATION", "PAYMENT_RECEIVED", "ORDER_SHIPPED", "ORDER_CANCELLED"]);
@@ -50,7 +51,11 @@ async function deliverEmail(logId: string): Promise<void> {
   const type = emailTypeSchema.parse(log.type);
   await prisma.emailLog.update({ where: { id: logId }, data: { status: "SENDING", error: null } });
   try {
-    const rendered = renderOrderEmail(type, log.order);
+    const tracking = createOrderTrackingToken(log.order.id, log.order.createdAt);
+    const trackingUrl = matchesOrderTrackingToken(tracking.token, log.order.trackingTokenHash)
+      ? `${env.APP_BASE_URL.replace(/\/$/, "")}/orders/track?code=${encodeURIComponent(log.order.code)}#token=${encodeURIComponent(tracking.token)}`
+      : null;
+    const rendered = renderOrderEmail(type, { ...log.order, trackingUrl });
     const result = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {

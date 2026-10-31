@@ -8,6 +8,7 @@ export interface EmailOrder {
   paidVnd: number;
   codAmountVnd: number;
   orderStatus: string;
+  trackingUrl?: string | null;
   items: Array<{ productName: string; variantName: string | null; unitPriceVnd: number; quantity: number }>;
   shipment?: { trackingCode: string | null } | null;
 }
@@ -42,7 +43,7 @@ export function renderOrderEmail(type: OrderEmailType, order: EmailOrder): Rende
   const items = itemRows(order);
   switch (type) {
     case "ORDER_CONFIRMATION":
-      return layout(`Nhà Mình đã nhận đơn ${order.code}`, `Chào ${order.customerName},\nĐơn ${order.code} đã được ghi nhận.\n${items.text}\nTổng đơn: ${money(order.totalVnd)}\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu: ${money(order.codAmountVnd)}`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được ghi nhận.</p>${items.html}<p>Tổng đơn: <strong>${money(order.totalVnd)}</strong><br>Đã thanh toán: ${money(order.paidVnd)}<br>Còn thu: ${money(order.codAmountVnd)}</p>`);
+      return layout(`Nhà Mình đã nhận đơn ${order.code}`, `Chào ${order.customerName},\nĐơn ${order.code} đã được ghi nhận.\n${items.text}\nTổng đơn: ${money(order.totalVnd)}\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu: ${money(order.codAmountVnd)}${order.trackingUrl ? `\nTheo dõi đơn: ${order.trackingUrl}` : ""}`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được ghi nhận.</p>${items.html}<p>Tổng đơn: <strong>${money(order.totalVnd)}</strong><br>Đã thanh toán: ${money(order.paidVnd)}<br>Còn thu: ${money(order.codAmountVnd)}</p>${order.trackingUrl ? `<p><a href="${escapeHtml(order.trackingUrl)}">Theo dõi đơn hàng</a></p>` : ""}`);
     case "PAYMENT_RECEIVED":
       return layout(`Đã nhận thanh toán đơn ${order.code}`, `Chào ${order.customerName},\nNhà Mình đã nhận thanh toán cho đơn ${order.code}.\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu khi giao: ${money(order.codAmountVnd)}`, `<p>Chào ${name}, Nhà Mình đã nhận thanh toán cho đơn <strong>${code}</strong>.</p><p>Đã thanh toán: <strong>${money(order.paidVnd)}</strong><br>Còn thu khi giao: ${money(order.codAmountVnd)}</p>`);
     case "ORDER_SHIPPED": {

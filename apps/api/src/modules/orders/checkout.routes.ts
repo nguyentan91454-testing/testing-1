@@ -1,13 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { Router } from "express";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { rateLimit } from "express-rate-limit";
+import { env } from "../../config/env.js";
 import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { optionalCustomer } from "../../http/customer-auth.js";
 import { calculatePrice } from "../pricing/pricing.js";
 import { couponDiscount, couponIdentityHashes, requireCouponAccount } from "../pricing/coupon.js";
-import { buildMockVietQr, getMockPaymentStatus } from "./mock-payment.js";
+import { buildMockVietQr, createOrderTrackingToken, getMockPaymentStatus, hashOrderTrackingToken, matchesOrderTrackingToken, verifyOrderTrackingToken } from "./mock-payment.js";
 import { notifyEmailWorker, recordOrderEmail } from "../email/email.service.js";
 
 const checkoutSchema = z.object({
@@ -22,38 +24,102 @@ const checkoutSchema = z.object({
 });
 
 export const checkoutRouter = Router();
+const mockPaymentLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
 
 function checkoutPayment(orderCode: string, payment: { id: string; type: "FULL" | "DEPOSIT" | "COD"; amountVnd: number; status: "PENDING" | "SUCCEEDED" | "FAILED" } | null) {
   if (!payment || payment.status !== "PENDING") return null;
   return { id: payment.id, type: payment.type, amountVnd: payment.amountVnd, provider: "MOCK", qr: buildMockVietQr(orderCode, payment.amountVnd) };
 }
 
-checkoutRouter.post("/:orderId/pay-mock", async (request, response, next) => {
+function existingTrackingToken(order: { id: string; createdAt: Date; trackingTokenHash: string | null }) {
+  const tracking = createOrderTrackingToken(order.id, order.createdAt);
+  return matchesOrderTrackingToken(tracking.token, order.trackingTokenHash)
+    ? { token: tracking.token, expiresAt: tracking.expiresAt }
+    : null;
+}
+
+async function getTrackedOrderId(orderCode: string, token: string): Promise<string> {
+  const verified = verifyOrderTrackingToken(token);
+  if (!verified) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_TRACKING_NOT_FOUND");
+  const order = await prisma.order.findUnique({ where: { id: verified.orderId }, select: { id: true, code: true, trackingTokenHash: true } });
+  if (!order || order.code !== orderCode || !matchesOrderTrackingToken(token, order.trackingTokenHash)) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_TRACKING_NOT_FOUND");
+  return order.id;
+}
+
+async function confirmMockPayment(orderId: string) {
+  const result = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND");
+    const payment = await tx.payment.findFirst({ where: { orderId, provider: "MOCK" }, orderBy: { createdAt: "desc" } });
+    if (!payment) throw new HttpError(409, "Đơn hàng không có khoản thanh toán demo", "MOCK_PAYMENT_NOT_FOUND");
+    if (payment.status === "SUCCEEDED") return { order, alreadyProcessed: true, emailLogId: null };
+    if (payment.status !== "PENDING" || order.paymentStatus !== "DEPOSIT_PENDING" || order.orderStatus !== "PENDING") {
+      throw new HttpError(409, "Khoản thanh toán không còn chờ xác nhận", "MOCK_PAYMENT_NOT_PENDING");
+    }
+    if (order.reservationExpiresAt && order.reservationExpiresAt <= new Date()) throw new HttpError(409, "Thời hạn thanh toán của đơn đã hết", "PAYMENT_RESERVATION_EXPIRED");
+    const paidVnd = order.paidVnd + payment.amountVnd;
+    const paymentStatus = getMockPaymentStatus(order.totalVnd, order.paidVnd, payment.amountVnd);
+    const changedPayment = await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "SUCCEEDED", providerTxnId: `MOCK-${payment.id}` } });
+    if (changedPayment.count !== 1) throw new HttpError(409, "Khoản thanh toán vừa được xử lý", "MOCK_PAYMENT_ALREADY_PROCESSED");
+    const changedOrder = await tx.order.updateMany({ where: { id: order.id, paymentStatus: "DEPOSIT_PENDING", orderStatus: "PENDING" }, data: { paidVnd, paymentStatus } });
+    if (changedOrder.count !== 1) throw new HttpError(409, "Đơn hàng vừa thay đổi, vui lòng tải lại", "ORDER_CHANGED");
+    await tx.orderEvent.create({ data: { orderId, type: "MOCK_PAYMENT_CONFIRMED", actor: "mock-payment", payload: { paymentId: payment.id, amountVnd: payment.amountVnd } } });
+    const emailLogId = await recordOrderEmail(tx, orderId, "PAYMENT_RECEIVED", order.email);
+    return { order: { ...order, paidVnd, paymentStatus }, alreadyProcessed: false, emailLogId };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  if (result.emailLogId) await notifyEmailWorker(result.emailLogId);
+  return { id: result.order.id, code: result.order.code, paidVnd: result.order.paidVnd, paymentStatus: result.order.paymentStatus, orderStatus: result.order.orderStatus, alreadyProcessed: result.alreadyProcessed };
+}
+
+checkoutRouter.get("/track/:orderCode", async (request, response, next) => {
   try {
-    if (process.env.NODE_ENV === "production") throw new HttpError(404, "Không tìm thấy tài nguyên", "NOT_FOUND");
-    const { orderId } = z.object({ orderId: z.string().uuid() }).parse(request.params);
-    const result = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
-      if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND");
-      const payment = await tx.payment.findFirst({ where: { orderId, provider: "MOCK" }, orderBy: { createdAt: "desc" } });
-      if (!payment) throw new HttpError(409, "Đơn hàng không có khoản thanh toán demo", "MOCK_PAYMENT_NOT_FOUND");
-      if (payment.status === "SUCCEEDED") return { order, alreadyProcessed: true, emailLogId: null };
-      if (payment.status !== "PENDING" || order.paymentStatus !== "DEPOSIT_PENDING" || order.orderStatus !== "PENDING") {
-        throw new HttpError(409, "Khoản thanh toán không còn chờ xác nhận", "MOCK_PAYMENT_NOT_PENDING");
-      }
-      if (order.reservationExpiresAt && order.reservationExpiresAt <= new Date()) throw new HttpError(409, "Thời hạn thanh toán của đơn đã hết", "PAYMENT_RESERVATION_EXPIRED");
-      const paidVnd = order.paidVnd + payment.amountVnd;
-      const paymentStatus = getMockPaymentStatus(order.totalVnd, order.paidVnd, payment.amountVnd);
-      const changedPayment = await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "SUCCEEDED", providerTxnId: `MOCK-${payment.id}` } });
-      if (changedPayment.count !== 1) throw new HttpError(409, "Khoản thanh toán vừa được xử lý", "MOCK_PAYMENT_ALREADY_PROCESSED");
-      const changedOrder = await tx.order.updateMany({ where: { id: order.id, paymentStatus: "DEPOSIT_PENDING", orderStatus: "PENDING" }, data: { paidVnd, paymentStatus } });
-      if (changedOrder.count !== 1) throw new HttpError(409, "Đơn hàng vừa thay đổi, vui lòng tải lại", "ORDER_CHANGED");
-      await tx.orderEvent.create({ data: { orderId, type: "MOCK_PAYMENT_CONFIRMED", actor: "mock-payment", payload: { paymentId: payment.id, amountVnd: payment.amountVnd } } });
-      const emailLogId = await recordOrderEmail(tx, orderId, "PAYMENT_RECEIVED", order.email);
-      return { order: { ...order, paidVnd, paymentStatus }, alreadyProcessed: false, emailLogId };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    if (result.emailLogId) await notifyEmailWorker(result.emailLogId);
-    response.json({ success: true, data: { id: result.order.id, code: result.order.code, paidVnd: result.order.paidVnd, paymentStatus: result.order.paymentStatus, orderStatus: result.order.orderStatus, alreadyProcessed: result.alreadyProcessed } });
+    const { orderCode } = z.object({ orderCode: z.string().trim().min(8).max(40) }).parse(request.params);
+    const token = z.string().min(40).max(256).parse(request.get("x-order-tracking-token"));
+    const orderId = await getTrackedOrderId(orderCode, token);
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        code: true, orderStatus: true, paymentStatus: true, totalVnd: true, paidVnd: true, codAmountVnd: true,
+        createdAt: true, reservationExpiresAt: true,
+        items: { select: { productName: true, variantName: true, quantity: true } },
+        payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } },
+      },
+    });
+    if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_TRACKING_NOT_FOUND");
+    const payment = order.payments[0] ?? null;
+    response.json({ success: true, data: {
+      code: order.code, orderStatus: order.orderStatus, paymentStatus: order.paymentStatus,
+      totalVnd: order.totalVnd, paidVnd: order.paidVnd, codAmountVnd: order.codAmountVnd,
+      createdAt: order.createdAt, reservationExpiresAt: order.reservationExpiresAt,
+      items: order.items,
+      payment: checkoutPayment(order.code, payment),
+    } });
+  } catch (error) { next(error); }
+});
+
+checkoutRouter.get("/track/:orderCode/qr", async (request, response, next) => {
+  try {
+    const { orderCode } = z.object({ orderCode: z.string().trim().min(8).max(40) }).parse(request.params);
+    const token = z.string().min(40).max(256).parse(request.get("x-order-tracking-token"));
+    const orderId = await getTrackedOrderId(orderCode, token);
+    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { code: true, reservationExpiresAt: true, payments: { where: { status: "PENDING", provider: "MOCK" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
+    if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng", "ORDER_TRACKING_NOT_FOUND");
+    if (order.reservationExpiresAt && order.reservationExpiresAt <= new Date()) throw new HttpError(409, "Thời hạn thanh toán của đơn đã hết", "PAYMENT_RESERVATION_EXPIRED");
+    const payment = order.payments[0];
+    if (!payment) throw new HttpError(409, "Đơn hàng không còn khoản thanh toán chờ xử lý", "MOCK_PAYMENT_NOT_PENDING");
+    response.json({ success: true, data: { paymentId: payment.id, type: payment.type, amountVnd: payment.amountVnd, provider: "MOCK", qr: buildMockVietQr(order.code, payment.amountVnd) } });
+  } catch (error) { next(error); }
+});
+
+checkoutRouter.post("/track/:orderCode/confirm-payment", mockPaymentLimiter, async (request, response, next) => {
+  try {
+    if (env.NODE_ENV === "production" && env.ALLOW_MOCK_PAYMENTS !== "true") {
+      throw new HttpError(404, "Không tìm thấy tài nguyên", "NOT_FOUND");
+    }
+    const { orderCode } = z.object({ orderCode: z.string().trim().min(8).max(40) }).parse(request.params);
+    const token = z.string().min(40).max(256).parse(request.get("x-order-tracking-token"));
+    const orderId = await getTrackedOrderId(orderCode, token);
+    response.json({ success: true, data: await confirmMockPayment(orderId) });
   } catch (error) { next(error); }
 });
 
@@ -83,9 +149,10 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
     const sessionId = request.cookies?.[cartCookie] as string | undefined;
     if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) throw new HttpError(400, "Giỏ hàng không hợp lệ", "CART_SESSION_REQUIRED");
 
-    const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
+    const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, createdAt: true, trackingTokenHash: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
     if (previous) {
-      Object.assign(previous, { payment: checkoutPayment(previous.code, previous.payments[0] ?? null) });
+      const tracking = existingTrackingToken(previous);
+      Object.assign(previous, { payment: checkoutPayment(previous.code, previous.payments[0] ?? null), trackingToken: tracking?.token ?? null, trackingExpiresAt: tracking?.expiresAt ?? null });
       response.status(200).json({ success: true, data: previous, message: "Đơn đã được tạo trước đó" });
       return;
     }
@@ -201,6 +268,8 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
           ...(input.note === undefined ? {} : { note: input.note }),
         },
       });
+      const tracking = createOrderTrackingToken(created.id, created.createdAt);
+      await tx.order.update({ where: { id: created.id }, data: { trackingTokenHash: hashOrderTrackingToken(tracking.token) } });
       await tx.orderItem.createMany({ data: lines.map((line) => ({
         orderId: created.id,
         variantId: line.variantId,
@@ -235,22 +304,26 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
       const emailLogId = await recordOrderEmail(tx, created.id, "ORDER_CONFIRMATION", created.email);
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.update({ where: { id: cart.id }, data: { couponId: null } });
-      return { order: created, payment: createdPayment, emailLogId };
+      return { order: created, payment: createdPayment, emailLogId, tracking };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     const { order: createdOrder, payment: createdPayment } = order;
     await notifyEmailWorker(order.emailLogId);
     response.status(201).json({
       success: true,
-      data: { id: createdOrder.id, code: createdOrder.code, totalVnd: createdOrder.totalVnd, paymentStatus: createdOrder.paymentStatus, orderStatus: createdOrder.orderStatus, codAmountVnd: createdOrder.codAmountVnd, depositRequiredVnd: createdOrder.depositRequiredVnd, payment: checkoutPayment(createdOrder.code, createdPayment), isDemo: true },
+      data: { id: createdOrder.id, code: createdOrder.code, totalVnd: createdOrder.totalVnd, paymentStatus: createdOrder.paymentStatus, orderStatus: createdOrder.orderStatus, codAmountVnd: createdOrder.codAmountVnd, depositRequiredVnd: createdOrder.depositRequiredVnd, payment: checkoutPayment(createdOrder.code, createdPayment), trackingToken: order.tracking.token, trackingExpiresAt: order.tracking.expiresAt, isDemo: true },
       message: "Đơn hàng demo đã được tạo",
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const idempotencyKey = request.get("idempotency-key");
       if (idempotencyKey) {
-        const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
-        if (previous) { response.status(200).json({ success: true, data: { ...previous, payment: checkoutPayment(previous.code, previous.payments[0] ?? null) } }); return; }
+        const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, createdAt: true, trackingTokenHash: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
+        if (previous) {
+          const tracking = existingTrackingToken(previous);
+          response.status(200).json({ success: true, data: { ...previous, payment: checkoutPayment(previous.code, previous.payments[0] ?? null), trackingToken: tracking?.token ?? null, trackingExpiresAt: tracking?.expiresAt ?? null } });
+          return;
+        }
       }
     }
     next(error);

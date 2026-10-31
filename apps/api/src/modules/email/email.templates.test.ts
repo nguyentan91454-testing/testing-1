@@ -26,4 +26,10 @@ describe("order email templates", () => {
     expect(rendered.html).toContain("&lt;script&gt;");
     if (type === "ORDER_SHIPPED") expect(rendered.html).toContain("TRACK-1");
   });
+
+  it("includes the signed tracking link in the order confirmation", () => {
+    const rendered = renderOrderEmail("ORDER_CONFIRMATION", { ...sampleOrder, trackingUrl: "https://shop.example/orders/track?code=DEMO-123#token=signed-token" });
+    expect(rendered.text).toContain("Theo dõi đơn: https://shop.example/orders/track?code=DEMO-123#token=signed-token");
+    expect(rendered.html).toContain("https://shop.example/orders/track?code=DEMO-123#token=signed-token");
+  });
 });

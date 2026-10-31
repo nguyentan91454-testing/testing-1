@@ -16,6 +16,7 @@ const envSchema = z.object({
   AI_PROVIDER: z.enum(["mock", "gemini"]).default("mock"),
   GEMINI_API_KEY: z.string().optional().default(""),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  ALLOW_MOCK_PAYMENTS: z.enum(["true", "false"]).default("false"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
   GOOGLE_CLIENT_ID: z.string().default(""),
