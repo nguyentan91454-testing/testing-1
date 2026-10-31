@@ -9,6 +9,7 @@
 - Module thuần tính giá VND và quy tắc chuyển trạng thái đơn, có unit test.
 - Catalog: `GET /api/v1/products` (lọc, sắp xếp, phân trang, tìm không dấu), `GET /api/v1/products/:slug`.
 - Giỏ khách vãng lai: `GET/POST/PATCH/DELETE /api/v1/cart` với session cookie HttpOnly; giá luôn lấy từ DB.
+- Mã giảm giá áp dụng/xóa tại `POST/DELETE /api/v1/cart/coupon`; cần đăng nhập Google để áp dụng và checkout kiểm tra lại điều kiện, lượt dùng, danh tính, giá giảm trong transaction.
 - Checkout demo: `POST /api/v1/orders`, cần header `Idempotency-Key`; kiểm tra tồn kho và tạo snapshot đơn trong transaction.
 - Admin riêng: `POST /api/v1/admin/auth/login`, `POST /api/v1/admin/auth/logout`, `GET /api/v1/admin/auth/me`; xem/chuyển trạng thái đơn qua `/api/v1/admin/orders`. Mọi route Admin cần session cookie và quyền kiểm tra tại API.
 - Admin đơn hàng: xem chi tiết qua `GET /api/v1/admin/orders/:orderId` (items, payments, shipment, timeline, ghi chú, khiếu nại, email logs); thêm ghi chú nội bộ qua `POST /api/v1/admin/orders/:orderId/notes`. Admin contact requests tại `GET /api/v1/admin/chatbot/contact-requests` và đổi trạng thái qua `PATCH /api/v1/admin/chatbot/contact-requests/:requestId`.

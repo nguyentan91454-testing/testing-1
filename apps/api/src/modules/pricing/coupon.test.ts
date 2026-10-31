@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { couponDiscount, couponIdentityHashes, normalizeCouponCode } from "./coupon.js";
+import { couponDiscount, couponIdentityHashes, normalizeCouponCode, requireCouponAccount } from "./coupon.js";
 
 describe("coupon helpers", () => {
   it("normalizes codes independent of case and surrounding whitespace", () => {
@@ -16,5 +16,10 @@ describe("coupon helpers", () => {
       .toEqual({ kind: "percent", value: 15, maxDiscountVnd: 100_000, minSubtotalVnd: 500_000 });
     expect(couponDiscount({ type: "FIXED", value: 25_000, maxDiscountVnd: null, minOrderVnd: 100_000 }))
       .toEqual({ kind: "fixed", valueVnd: 25_000, minSubtotalVnd: 100_000 });
+  });
+
+  it("requires an authenticated Google customer to use a coupon", () => {
+    expect(() => requireCouponAccount(undefined)).toThrowError(expect.objectContaining({ code: "COUPON_LOGIN_REQUIRED", status: 401 }));
+    expect(() => requireCouponAccount("customer-id")).not.toThrow();
   });
 });

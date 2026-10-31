@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
 import type { Coupon, CouponType } from "@prisma/client";
+import { HttpError } from "../../http/errors.js";
 import type { Discount } from "./pricing.js";
 
 export type CouponIdentity = { phone: string; address: string };
+
+export function requireCouponAccount(customerId: string | undefined): void {
+  if (!customerId) throw new HttpError(401, "Đăng nhập Google để sử dụng mã giảm giá", "COUPON_LOGIN_REQUIRED");
+}
 
 export function normalizeCouponCode(code: string): string {
   return code.trim().toUpperCase();

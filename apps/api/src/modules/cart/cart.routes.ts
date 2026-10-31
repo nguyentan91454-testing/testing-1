@@ -6,7 +6,7 @@ import { HttpError } from "../../http/errors.js";
 import { optionalCustomer } from "../../http/customer-auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { calculatePrice } from "../pricing/pricing.js";
-import { couponDiscount, normalizeCouponCode } from "../pricing/coupon.js";
+import { couponDiscount, normalizeCouponCode, requireCouponAccount } from "../pricing/coupon.js";
 
 const cookieName = "cart_session";
 const cartCookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "lax" as const, path: "/api/v1", maxAge: 30 * 24 * 60 * 60 * 1000 };
@@ -65,6 +65,7 @@ cartRouter.get("/", async (request, response, next) => {
 
 cartRouter.post("/coupon", async (request, response, next) => {
   try {
+    requireCouponAccount(request.customer?.id);
     const { code } = z.object({ code: z.string().trim().min(1).max(64) }).parse(request.body);
     const normalizedCode = normalizeCouponCode(code);
     const cart = await getCart(request, response);

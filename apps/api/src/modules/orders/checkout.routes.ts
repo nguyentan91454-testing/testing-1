@@ -6,7 +6,7 @@ import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { optionalCustomer } from "../../http/customer-auth.js";
 import { calculatePrice } from "../pricing/pricing.js";
-import { couponDiscount, couponIdentityHashes } from "../pricing/coupon.js";
+import { couponDiscount, couponIdentityHashes, requireCouponAccount } from "../pricing/coupon.js";
 import { buildMockVietQr, getMockPaymentStatus } from "./mock-payment.js";
 import { notifyEmailWorker, recordOrderEmail } from "../email/email.service.js";
 
@@ -94,6 +94,7 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
     const order = await prisma.$transaction(async (tx) => {
       const cart = await tx.cart.findFirst({ where: { sessionId }, include: { coupon: true } });
       if (!cart) throw new HttpError(400, "Giỏ hàng đang trống", "CART_EMPTY");
+      if (cart.couponId) requireCouponAccount(request.customer?.id);
       const items = await tx.cartItem.findMany({
         where: { cartId: cart.id },
         include: { variant: { include: { product: true, options: { include: { value: true } } } } },
