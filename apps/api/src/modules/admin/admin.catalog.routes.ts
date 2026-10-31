@@ -11,6 +11,68 @@ const productSelect = { id: true, slug: true, name: true, description: true, sta
 
 export const adminCatalogRouter = Router();
 
+adminCatalogRouter.get("/attribute-definitions", async (_request, response, next) => {
+  try {
+    const data = await prisma.attributeDefinition.findMany({ orderBy: { key: "asc" } });
+    response.json({ success: true, data });
+  } catch (error) { next(error); }
+});
+
+adminCatalogRouter.post("/attribute-definitions", async (request, response, next) => {
+  try {
+    const input = z.object({
+      key: z.string().trim().min(2).max(80).regex(/^[a-z][a-z0-9_]*$/),
+      label: z.string().trim().min(1).max(120),
+      type: z.enum(["STRING", "NUMBER", "BOOLEAN", "JSON"]),
+      unit: z.string().trim().max(30).nullable().optional(),
+      allowedValues: z.json().nullable().optional(),
+    }).parse(request.body);
+    const attribute = await prisma.$transaction(async (tx) => {
+      const created = await tx.attributeDefinition.create({ data: {
+        key: input.key, label: input.label, type: input.type,
+        unit: input.unit ?? null, allowedValues: input.allowedValues as Prisma.InputJsonValue | null ?? Prisma.JsonNull,
+      } });
+      await recordAdminChange(tx, { adminId: request.admin!.id, action: "ATTRIBUTE_DEFINITION_CREATED", entity: "AttributeDefinition", entityId: created.id, after: { key: created.key, label: created.label } });
+      return created;
+    });
+    response.status(201).json({ success: true, data: attribute });
+  } catch (error) { next(error); }
+});
+
+adminCatalogRouter.put("/products/:productId/attributes", async (request, response, next) => {
+  try {
+    const { productId } = z.object({ productId: z.string().uuid() }).parse(request.params);
+    const input = z.object({ attributes: z.array(z.object({ key: z.string().trim().min(1).max(80), value: z.json() })).max(100) }).parse(request.body);
+    const result = await prisma.$transaction(async (tx) => {
+      if (!await tx.product.findUnique({ where: { id: productId }, select: { id: true } })) throw new HttpError(404, "Product not found", "PRODUCT_NOT_FOUND");
+      const definitions = await tx.attributeDefinition.findMany({ where: { key: { in: input.attributes.map(({ key }) => key) } }, select: { id: true, key: true } });
+      if (definitions.length !== new Set(input.attributes.map(({ key }) => key)).size) throw new HttpError(400, "Every attribute key must exist and be unique", "INVALID_PRODUCT_ATTRIBUTES");
+      await tx.productAttribute.deleteMany({ where: { productId } });
+      if (input.attributes.length) await tx.productAttribute.createMany({ data: input.attributes.map(({ key, value }) => ({ productId, attributeId: definitions.find((definition) => definition.key === key)!.id, value: value as Prisma.InputJsonValue })) });
+      await recordAdminChange(tx, { adminId: request.admin!.id, action: "PRODUCT_ATTRIBUTES_REPLACED", entity: "Product", entityId: productId, after: input.attributes });
+      return tx.productAttribute.findMany({ where: { productId }, include: { attribute: true } });
+    });
+    response.json({ success: true, data: result });
+  } catch (error) { next(error); }
+});
+
+adminCatalogRouter.put("/variants/:variantId/attributes", async (request, response, next) => {
+  try {
+    const { variantId } = z.object({ variantId: z.string().uuid() }).parse(request.params);
+    const input = z.object({ attributes: z.array(z.object({ key: z.string().trim().min(1).max(80), value: z.json() })).max(100) }).parse(request.body);
+    const result = await prisma.$transaction(async (tx) => {
+      if (!await tx.variant.findUnique({ where: { id: variantId }, select: { id: true } })) throw new HttpError(404, "Variant not found", "VARIANT_NOT_FOUND");
+      const definitions = await tx.attributeDefinition.findMany({ where: { key: { in: input.attributes.map(({ key }) => key) } }, select: { id: true, key: true } });
+      if (definitions.length !== new Set(input.attributes.map(({ key }) => key)).size) throw new HttpError(400, "Every attribute key must exist and be unique", "INVALID_VARIANT_ATTRIBUTES");
+      await tx.variantAttribute.deleteMany({ where: { variantId } });
+      if (input.attributes.length) await tx.variantAttribute.createMany({ data: input.attributes.map(({ key, value }) => ({ variantId, attributeId: definitions.find((definition) => definition.key === key)!.id, value: value as Prisma.InputJsonValue })) });
+      await recordAdminChange(tx, { adminId: request.admin!.id, action: "VARIANT_ATTRIBUTES_REPLACED", entity: "Variant", entityId: variantId, after: input.attributes });
+      return tx.variantAttribute.findMany({ where: { variantId }, include: { attribute: true } });
+    });
+    response.json({ success: true, data: result });
+  } catch (error) { next(error); }
+});
+
 adminCatalogRouter.get("/products", async (request, response, next) => {
   try {
     const query = pageSchema.extend({ q: z.string().trim().max(120).optional(), status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]).optional() }).parse(request.query);

@@ -10,6 +10,7 @@ import { adminCatalogRouter } from "./admin.catalog.routes.js";
 import { adminCommerceRouter } from "./admin.commerce.routes.js";
 import { adminSettingsRouter } from "./admin.settings.routes.js";
 import { adminReportsRouter } from "./admin.reports.routes.js";
+import { lightingAdminRouter } from "../lighting/lighting.admin.routes.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -17,6 +18,7 @@ adminRouter.use(adminCatalogRouter);
 adminRouter.use(adminCommerceRouter);
 adminRouter.use("/settings", adminSettingsRouter);
 adminRouter.use("/reports", adminReportsRouter);
+adminRouter.use(lightingAdminRouter);
 
 adminRouter.get("/orders", async (request, response, next) => {
   try {
