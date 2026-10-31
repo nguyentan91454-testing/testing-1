@@ -1,5 +1,7 @@
 # Home & Decor Commerce
 
+Public menu filters: `GET /api/v1/categories` (active categories only), `GET /api/v1/spaces`, and `GET /api/v1/styles`; all are sorted by `sortOrder`, then `name`.
+
 Đồ án thương mại điện tử đồ gia dụng và trang trí. Toàn bộ đơn và thanh toán hiện ở chế độ demo; không nhận tiền thật.
 
 ## Backend hiện có
