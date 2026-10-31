@@ -1,5 +1,6 @@
 import { PrismaClient, ProductStatus } from "@prisma/client";
 import argon2 from "argon2";
+import { createHash } from "node:crypto";
 import dotenv from "dotenv";
 import { resolve } from "node:path";
 
@@ -51,6 +52,29 @@ async function main() {
       update: { lumenPerM2 },
       create: { roomType, lumenPerM2, notes: "Hệ số khuyến nghị, có thể điều chỉnh trong Admin." },
     });
+  }
+  await prisma.setting.upsert({
+    where: { key: "chatbot_policy" },
+    update: {},
+    create: { key: "chatbot_policy", value: {
+      dailyBudgetMicroUsd: 350_000,
+      monthlyBudgetMicroUsd: 8_000_000,
+      inputCostMicroUsdPerMillionTokens: 1_000_000,
+      outputCostMicroUsdPerMillionTokens: 5_000_000,
+      demoMode: false,
+    } },
+  });
+  const policyChunks = [
+    ["demo", "Đây là website đồ án với dữ liệu sản phẩm và giá minh họa. Không thu tiền thật. Thanh toán VietQR trong luồng demo chỉ là giả lập."],
+    ["warranty", "Bảo hành: 12 tháng cho phần điện của đèn (driver, nguồn, LED), tính từ ngày giao hàng thành công. Khách cần hỗ trợ qua yêu cầu liên hệ trên website; nhân viên sẽ phản hồi theo thông tin đã cung cấp."],
+    ["shipping-cod", "Vận chuyển và COD trong môi trường demo có thể dùng dữ liệu mô phỏng. Phương thức thanh toán và khoản cọc được xác định theo chính sách checkout đang lưu trong cấu hình tại thời điểm đặt đơn."],
+    ["privacy", "Chỉ cung cấp thông tin liên hệ khi cần nhân viên gọi lại hoặc xác minh đơn hàng. Không gửi số điện thoại, email, địa chỉ hay thông tin thanh toán vào nội dung chatbot."],
+    ["product-advice", "Khi chọn đèn, cân nhắc diện tích phòng, loại phòng, chiều cao trần, lumen, kiểu lắp đặt, nhiệt độ màu và ngân sách. Nếu thiếu diện tích hoặc chiều cao trần, hỏi khách trước khi tính lumen hoặc khẳng định một mẫu đèn phù hợp."],
+  ] as const;
+  for (const [sourceId, text] of policyChunks) {
+    const contentHash = createHash("sha256").update(text).digest("hex");
+    await prisma.contentChunk.deleteMany({ where: { source: "policy", sourceId } });
+    await prisma.contentChunk.create({ data: { source: "policy", sourceId, text, contentHash } });
   }
   const technicalAttributes = [
     { key: "lumen", label: "Quang thông", type: "NUMBER", unit: "lm" },

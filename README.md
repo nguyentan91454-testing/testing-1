@@ -12,6 +12,9 @@
 - Checkout demo: `POST /api/v1/orders`, cần header `Idempotency-Key`; kiểm tra tồn kho và tạo snapshot đơn trong transaction.
 - Admin riêng: `POST /api/v1/admin/auth/login`, `POST /api/v1/admin/auth/logout`, `GET /api/v1/admin/auth/me`; xem/chuyển trạng thái đơn qua `/api/v1/admin/orders`. Mọi route Admin cần session cookie và quyền kiểm tra tại API.
 - Health endpoints: `/api/v1/health/live` và `/api/v1/health/ready`.
+- Lighting calculator dùng chung web và bot: `GET /api/v1/lighting/room-types`, `POST /api/v1/lighting/calculate`.
+- Chatbot: `POST /api/v1/chat/messages`, `POST /api/v1/chat/session/reset`, gửi phản hồi qua `PATCH /api/v1/chat/messages/:messageId/feedback`. Phiên chat lưu bằng cookie HttpOnly; tra đơn khách cần `orderVerification` gồm mã đơn và 4 số cuối điện thoại, còn tên/số điện thoại liên hệ gửi riêng trong `contactDetails` để không đưa vào prompt AI.
+- Admin chatbot: `GET/PUT /api/v1/admin/chatbot/settings`, `GET /api/v1/admin/chatbot/usage`, xem hội thoại tại `/api/v1/admin/chatbot/sessions`, xử lý yêu cầu liên hệ tại `/api/v1/admin/chatbot/contact-requests`.
 
 ## Chạy local
 
@@ -31,5 +34,5 @@ API mặc định chạy tại `http://localhost:4000`; Mailpit tại `http://lo
 
 Seed tạo admin từ `ADMIN_BOOTSTRAP_EMAIL` và `ADMIN_BOOTSTRAP_PASSWORD` trong `.env`. Đổi cả mật khẩu mẫu và `JWT_ACCESS_SECRET` trước khi đưa lên môi trường public. Checkout và VietQR hiện là demo, không kết nối ngân hàng thật.
 
-Các phần backend còn lại theo PRD gồm OAuth Google cho khách hàng, xác nhận thanh toán giả lập/webhook, worker hết hạn giữ hàng, email, vận chuyển và chatbot.
+Chatbot dùng Gemini khi `AI_PROVIDER=gemini` và `GEMINI_API_KEY` được cấu hình; mặc định `AI_PROVIDER=mock` chỉ lọc sản phẩm từ database. Ngân sách và chế độ demo chỉnh trong Admin. Các phần backend còn lại theo PRD gồm recommendations/ML, vận chuyển và các tích hợp giao diện.
 

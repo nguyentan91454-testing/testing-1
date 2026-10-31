@@ -15,6 +15,7 @@ import { cartRouter } from "./modules/cart/cart.routes.js";
 import { checkoutRouter } from "./modules/orders/checkout.routes.js";
 import { adminRouter } from "./modules/admin/admin.routes.js";
 import { lightingRouter } from "./modules/lighting/lighting.routes.js";
+import { chatRouter } from "./modules/chatbot/chat.routes.js";
 
 export const app = express();
 
@@ -39,6 +40,7 @@ app.use(rateLimit({ windowMs: 60_000, limit: 100, standardHeaders: "draft-8", le
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/products", catalogRouter);
 app.use("/api/v1/lighting", lightingRouter);
+app.use("/api/v1/chat", chatRouter);
 app.use("/api/v1/admin/auth", adminAuthRouter);
 app.use("/api/v1/auth", customerAuthRouter);
 app.use("/api/v1/cart", cartRouter);
