@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, ShieldCheck } from "lucide-react";
@@ -27,10 +27,12 @@ export function CheckoutPage() {
   usePageMeta("Đặt hàng demo", "Nhập thông tin giao nhận và chọn phương thức thanh toán mô phỏng.");
   const queryClient = useQueryClient();
   const cart = useQuery({ queryKey: ["cart"], queryFn: api.cart });
+  const customer = useQuery({ queryKey: ["customer"], queryFn: api.customer, retry: false });
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const keyRef = useRef<string>(crypto.randomUUID());
   const form = useForm<CheckoutForm>({ resolver: zodResolver(checkoutSchema), defaultValues: { paymentMethod: "COD", consent: false } });
+  useEffect(()=>{if(customer.data){if(customer.data.name)form.setValue("customerName",customer.data.name);form.setValue("email",customer.data.email);}},[customer.data,form]);
   const submitOrder = useMutation({ mutationFn: ({ input }: { input: CheckoutForm }) => api.checkout(input, keyRef.current), onSuccess: (value) => { setResult(value); queryClient.invalidateQueries({ queryKey: ["cart"] }); } });
   const confirmPayment = useMutation({ mutationFn: () => result ? api.confirmMockPayment(result.code, result.trackingToken) : Promise.reject(new Error("Không tìm thấy thông tin thanh toán.")), onSuccess: () => setConfirmed(true) });
 
@@ -40,7 +42,7 @@ export function CheckoutPage() {
 
   if (result) return <div className="wrap checkout-page"><div className="breadcrumbs"><Link to="/">Trang chủ</Link><span>/</span><span>Đặt hàng</span></div><div className="checkout-success"><span className="success-icon"><Check/></span><span className="eyebrow">ĐƠN HÀNG DEMO ĐÃ ĐƯỢC GHI NHẬN</span><h1>Cảm ơn bạn, {form.getValues("customerName")}.</h1><p className="success-code">Mã đơn <strong>{result.code}</strong></p><div className="success-summary"><div><span>Tổng đơn</span><strong>{formatVnd(result.totalVnd)}</strong></div><div><span>Đã thanh toán</span><strong>{formatVnd(result.depositRequiredVnd)}</strong></div><div><span>Còn thu khi giao</span><strong>{formatVnd(result.codAmountVnd)}</strong></div><div><span>Trạng thái</span><strong>Đang chờ xử lý</strong></div></div>
       {result.payment && <div className="mock-payment"><div><span className="eyebrow">VIETQR MÔ PHỎNG</span><h2>Thanh toán thử nghiệm</h2><p>Không chuyển tiền thật. Mã QR chỉ phục vụ trình diễn.</p><strong>{formatVnd(result.payment.amountVnd)}</strong><span className="qr-caption">Nội dung: {result.payment.qr.payload}</span></div><img src={result.payment.qr.imageUrl} alt="Mã QR thanh toán mô phỏng"/><button className="button button-dark" disabled={confirmPayment.isPending || confirmed} onClick={() => confirmPayment.mutate()}>{confirmed ? "Đã xác nhận thanh toán demo" : confirmPayment.isPending ? "Đang xác nhận..." : "Giả lập đã thanh toán"}<Check size={16}/></button>{confirmPayment.isError && <p className="inline-error">{confirmPayment.error.message}</p>}</div>}
-      <Link to="/products" className="button button-outline">Quay lại mua sắm <ArrowRight size={16}/></Link><p className="privacy-note"><ShieldCheck size={15}/> Thông tin này chỉ dùng trong môi trường demo. Token theo dõi không được lưu vào URL.</p></div></div>;
+      <Link to={`/orders/track?code=${encodeURIComponent(result.code)}`} className="button button-dark">Theo dõi đơn hàng <ArrowRight size={16}/></Link><Link to="/products" className="button button-outline">Quay lại mua sắm <ArrowRight size={16}/></Link><p className="privacy-note"><ShieldCheck size={15}/> Dùng mã đơn cùng số điện thoại đã đặt hàng để tra cứu an toàn.</p></div></div>;
 
   return <div className="wrap checkout-page"><div className="breadcrumbs"><Link to="/">Trang chủ</Link><span>/</span><Link to="/cart">Giỏ hàng</Link><span>/</span><span>Đặt hàng</span></div><div className="checkout-heading"><div><span className="eyebrow">THÔNG TIN GIAO NHẬN</span><h1>Hoàn tất đơn hàng.</h1></div><div className="checkout-steps"><span className="done"><Check size={13}/> Giỏ hàng</span><i/><span className="current">Thông tin & thanh toán</span></div></div>
     <div className="checkout-layout"><form className="checkout-form" onSubmit={form.handleSubmit((values) => submitOrder.mutate({ input: values }))} noValidate>

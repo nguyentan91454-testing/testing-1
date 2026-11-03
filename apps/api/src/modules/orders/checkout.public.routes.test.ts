@@ -6,7 +6,7 @@ import { errorHandler } from "../../http/errors.js";
 const { prismaMock, emailMock } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
-    order: { findUnique: vi.fn(), updateMany: vi.fn() },
+    order: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     payment: { findFirst: vi.fn(), updateMany: vi.fn() },
     orderEvent: { create: vi.fn() },
   },
@@ -51,6 +51,7 @@ afterAll(async () => {
 beforeEach(() => {
   prismaMock.$transaction.mockReset();
   prismaMock.order.findUnique.mockReset();
+  prismaMock.order.findFirst.mockReset();
   prismaMock.order.updateMany.mockReset();
   prismaMock.payment.findFirst.mockReset();
   prismaMock.payment.updateMany.mockReset();
@@ -58,6 +59,7 @@ beforeEach(() => {
   emailMock.recordOrderEmail.mockReset();
   emailMock.notifyEmailWorker.mockReset();
   prismaMock.order.findUnique.mockResolvedValue(order);
+  prismaMock.order.findFirst.mockResolvedValue(order);
   prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
   prismaMock.payment.findFirst.mockResolvedValue({ id: "payment-id", provider: "MOCK", type: "DEPOSIT", amountVnd: 30000, status: "PENDING" });
   prismaMock.payment.updateMany.mockResolvedValue({ count: 1 });
@@ -78,6 +80,18 @@ describe("public order tracking and mock payment", () => {
     expect(body.data.code).toBe(orderCode);
     expect(body.data.items).toEqual(order.items);
     expect(JSON.stringify(body)).not.toContain(order.phone);
+    expect(JSON.stringify(body)).not.toContain(order.email);
+    expect(JSON.stringify(body)).not.toContain(order.addressDetail);
+  });
+
+  it("verifies public tracking with the order code and normalized phone", async () => {
+    const response = await fetch(`${baseUrl}/orders/track-verify`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderCode, phone: "+84 901 234 567" }),
+    });
+    const body = await response.json() as { data: Record<string, unknown> };
+    expect(response.status).toBe(200);
+    expect(body.data.code).toBe(orderCode);
+    expect(prismaMock.order.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { code: orderCode, phone: "0901234567" } }));
     expect(JSON.stringify(body)).not.toContain(order.email);
     expect(JSON.stringify(body)).not.toContain(order.addressDetail);
   });

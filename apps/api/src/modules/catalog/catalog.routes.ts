@@ -11,11 +11,15 @@ const querySchema = z.object({
   style: z.string().trim().max(80).optional(),
   minPrice: z.coerce.number().int().min(0).optional(),
   maxPrice: z.coerce.number().int().min(0).optional(),
+  minLumens: z.coerce.number().int().min(0).optional(),
+  maxLumens: z.coerce.number().int().min(0).optional(),
+  socket: z.string().trim().max(80).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   sort: z.enum(["newest", "price_asc", "price_desc"]).default("newest"),
-}).refine((query) => query.minPrice === undefined || query.maxPrice === undefined || query.minPrice <= query.maxPrice, {
-  message: "minPrice must not exceed maxPrice",
+}).refine((query) => (query.minPrice === undefined || query.maxPrice === undefined || query.minPrice <= query.maxPrice)
+  && (query.minLumens === undefined || query.maxLumens === undefined || query.minLumens <= query.maxLumens), {
+  message: "Filter ranges are invalid",
 });
 
 export const catalogRouter = Router();
@@ -44,6 +48,23 @@ catalogRouter.get("/", async (request, response, next) => {
           ...(query.maxPrice === undefined ? {} : { lte: query.maxPrice }),
         },
       } } });
+    }
+    if (query.minLumens !== undefined || query.maxLumens !== undefined || query.socket) {
+      const conditions: Prisma.Sql[] = [];
+      if (query.minLumens !== undefined || query.maxLumens !== undefined) conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM product_attributes pa JOIN attribute_definitions ad ON ad.id = pa.attribute_id
+        WHERE pa.product_id = p.id AND ad.key IN ('lumens', 'lumen')
+          AND (pa.value #>> '{}') ~ '^[0-9]+(\\.[0-9]+)?$'
+          ${query.minLumens === undefined ? Prisma.empty : Prisma.sql`AND (pa.value #>> '{}')::numeric >= ${query.minLumens}`}
+          ${query.maxLumens === undefined ? Prisma.empty : Prisma.sql`AND (pa.value #>> '{}')::numeric <= ${query.maxLumens}`}
+      )`);
+      if (query.socket) conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM product_attributes pa JOIN attribute_definitions ad ON ad.id = pa.attribute_id
+        WHERE pa.product_id = p.id AND ad.key IN ('socket', 'socket_type', 'bulb_base')
+          AND lower(pa.value #>> '{}') = lower(${query.socket})
+      )`);
+      const matches = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT p.id FROM products p WHERE p.status = 'ACTIVE' AND p.is_active = TRUE AND ${Prisma.join(conditions, " AND ")}`);
+      filters.push({ id: { in: matches.map(({ id }) => id) } });
     }
 
     const where: Prisma.ProductWhereInput = { AND: filters };

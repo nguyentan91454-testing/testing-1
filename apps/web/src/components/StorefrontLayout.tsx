@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Menu, Search, ShoppingBag, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, Menu, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { api } from "../lib/api";
 import { ChatWidget } from "./chat/ChatWidget";
 
@@ -9,8 +9,21 @@ export function StorefrontLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const cartQuery = useQuery({ queryKey: ["cart"], queryFn: api.cart });
+  const customer = useQuery({ queryKey: ["customer"], queryFn: api.customer, retry: false });
+  const logout = useMutation({ mutationFn: api.customerLogout, onSuccess: () => { queryClient.setQueryData(["customer"], null); queryClient.invalidateQueries({ queryKey: ["cart"] }); } });
   const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("auth") === "success") {
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
+      params.delete("auth");
+      navigate({ pathname: location.pathname, search: params.toString() ? `?${params}` : "" }, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate, queryClient]);
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +47,7 @@ export function StorefrontLayout() {
           </form>
           <div className="header-actions">
             <Link className="header-text-link" to="/products">Khám phá</Link>
+            {customer.data ? <button className="customer-account-link" onClick={() => logout.mutate()} title="Đăng xuất"><img src={customer.data.avatarUrl ?? ""} alt="" onError={e=>{e.currentTarget.style.display="none";}}/><UserRound size={16}/><span>{customer.data.name||"Tài khoản"}</span></button> : <a className="customer-account-link" href="/api/v1/auth/google" aria-label="Đăng nhập Google"><UserRound size={17}/><span>Đăng nhập</span></a>}
             <Link className="bag-link" to="/cart" aria-label={`Giỏ hàng, ${cartCount} sản phẩm`}><ShoppingBag size={21} /><span>Giỏ hàng</span><b>{cartQuery.isLoading ? "–" : cartCount}</b></Link>
           </div>
         </div>
@@ -53,7 +67,7 @@ export function StorefrontLayout() {
       <footer className="site-footer">
         <div className="wrap footer-top">
           <div><Link to="/" className="wordmark footer-wordmark"><span className="wordmark-mark">n.</span><span>nhà mình<small>LIGHTING & LIVING</small></span></Link><p>Ánh sáng dịu dàng cho những điều thân thuộc.</p></div>
-          <div className="footer-links"><div><strong>Khám phá</strong><Link to="/products">Tất cả sản phẩm</Link><a href="/#spaces">Theo không gian</a><a href="/#lighting">Tính ánh sáng</a></div><div><strong>Thông tin</strong><span>Đồ án tốt nghiệp · dữ liệu minh họa</span><span>Không nhận thanh toán thật</span></div></div>
+          <div className="footer-links"><div><strong>Khám phá</strong><Link to="/products">Tất cả sản phẩm</Link><a href="/#spaces">Theo không gian</a><a href="/#lighting">Tính ánh sáng</a><Link to="/orders/track">Tra cứu đơn hàng</Link></div><div><strong>Thông tin</strong><Link to="/chinh-sach-bao-hanh">Chính sách bảo hành</Link><Link to="/chinh-sach-van-chuyen-cod">Vận chuyển & COD</Link><Link to="/chinh-sach-quyen-rieng-tu">Quyền riêng tư</Link><Link to="/ghi-cong-hinh-anh">Ghi công hình ảnh</Link><Link to="/gioi-thieu-do-an">Giới thiệu đồ án</Link><span>Không nhận thanh toán thật</span></div></div>
         </div>
         <div className="wrap image-credit">Ảnh không gian minh họa từ <a href="https://unsplash.com/license" target="_blank" rel="noreferrer">Unsplash</a>.</div>
         <div className="wrap footer-bottom"><span>© 2026 Nhà Mình</span><span>Designed for the way home feels.</span></div>

@@ -1,29 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, PackageCheck, Ruler, ShieldCheck } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatVnd } from "../lib/format";
 import { usePageMeta } from "../hooks/usePageMeta";
+import { ProductGrid } from "../components/ProductGrid";
 
 export function ProductPage() {
   const { slug = "" } = useParams();
   usePageMeta(queryTitle(slug), "Thông tin thiết kế, phiên bản và thông số của sản phẩm Nhà Mình.");
   const [variantIndex, setVariantIndex] = useState(0);
+  const [imageIndex,setImageIndex]=useState(0);
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["product", slug], queryFn: () => api.product(slug) });
+  const related = useQuery({ queryKey:["related-products",slug],enabled:!!query.data,queryFn:()=>api.products(new URLSearchParams({category:query.data?.categories?.[0]?.category.slug??"",limit:"8",sort:"newest"})) });
+  useEffect(()=>{setVariantIndex(0);setImageIndex(0);},[slug]);
   const add = useMutation({ mutationFn: (variantId: string) => api.addCartItem(variantId, 1), onSuccess: (cart) => queryClient.setQueryData(["cart"], cart) });
   if (query.isLoading) return <div className="wrap page-pending"><div className="product-skeleton detail-skeleton"/><span>Đang tải thông tin sản phẩm...</span></div>;
   if (query.isError || !query.data) return <div className="wrap error-page"><span className="eyebrow">KHÔNG TÌM THẤY SẢN PHẨM</span><h1>Mẫu đèn này chưa sẵn sàng.</h1><p>{query.error?.message ?? "Sản phẩm có thể đã được cập nhật hoặc tạm ẩn."}</p><Link to="/products" className="button button-dark">Quay lại bộ sưu tập <ArrowRight size={16}/></Link></div>;
 
   const product = query.data;
   const variant = product.variants[variantIndex] ?? product.variants[0];
-  const image = product.images[0];
+  const image = product.images[imageIndex]??product.images[0];
+  const discountPercent=variant?.compareAtPriceVnd&&variant.compareAtPriceVnd>variant.priceVnd?Math.round((1-variant.priceVnd/variant.compareAtPriceVnd)*100):0;
   const optionNames = variant?.options?.map(({ value }) => `${value.optionType.name}: ${value.name}`).join(" · ");
   return <div className="wrap product-page">
     <div className="breadcrumbs"><Link to="/">Trang chủ</Link><span>/</span><Link to="/products">Đèn & trang trí</Link><span>/</span><span>{product.name}</span></div>
-    <div className="product-detail-layout"><div className="detail-image">{image ? <img src={image.url} alt={image.alt ?? product.name}/> : <div className="image-missing large"><span>Ảnh minh họa<br/>đang được cập nhật</span></div>}<span className="demo-image-label">ẢNH MINH HỌA</span></div>
-      <section className="product-detail-info"><span className="eyebrow">{product.brand?.name ?? product.categories?.[0]?.category.name ?? "NHÀ MÌNH SELECTED"}</span><h1>{product.name}</h1><div className="detail-price">{formatVnd(variant?.priceVnd ?? product.minPriceVnd)}{variant?.compareAtPriceVnd && variant.compareAtPriceVnd > variant.priceVnd && <del>{formatVnd(variant.compareAtPriceVnd)}</del>}</div><p className="detail-description">{product.description ?? "Một thiết kế ánh sáng được lựa chọn cho nhịp sống và không gian của bạn."}</p>
+    <div className="product-detail-layout"><div><div className="detail-image">{image ? <img src={image.url} alt={image.alt ?? product.name}/> : <div className="image-missing large"><span>Ảnh minh họa<br/>đang được cập nhật</span></div>}{discountPercent>0&&<span className="detail-sale-tag">-{discountPercent}%</span>}<span className="demo-image-label">ẢNH MINH HỌA</span></div>{product.images.length>1&&<div className="detail-thumbnails" aria-label="Thư viện ảnh">{product.images.map((item,index)=><button type="button" key={item.id} className={index===imageIndex?"selected":""} onClick={()=>setImageIndex(index)} aria-label={`Xem ảnh ${index+1}`}><img src={item.url} alt={item.alt??`${product.name}, ảnh ${index+1}`}/></button>)}</div>}</div>
+      <section className="product-detail-info"><span className="eyebrow">{product.brand?.name ?? product.categories?.[0]?.category.name ?? "NHÀ MÌNH SELECTED"}</span><h1>{product.name}</h1><div className="detail-price">{formatVnd(variant?.priceVnd ?? product.minPriceVnd)}{discountPercent>0&&<><del>{formatVnd(variant!.compareAtPriceVnd!)}</del><span className="detail-sale-copy">Tiết kiệm {discountPercent}%</span></>}</div><p className="detail-description">{product.description ?? "Một thiết kế ánh sáng được lựa chọn cho nhịp sống và không gian của bạn."}</p>
         {product.variants.length > 1 && <div className="variant-picker"><span>Chọn phiên bản</span><div>{product.variants.map((item, index) => <button type="button" className={index === variantIndex ? "selected" : ""} key={item.id} onClick={() => setVariantIndex(index)}>{item.options?.map(({ value }) => value.name).join(" · ") || item.sku}</button>)}</div></div>}
         {optionNames && <p className="selected-option"><Check size={15}/>{optionNames}</p>}
         <div className="stock-status"><span className={variant?.stockQty ? "stock-dot" : "stock-dot empty"}/>{variant?.stockQty ? `Còn ${variant.stockQty} sản phẩm trong kho demo` : "Phiên bản này tạm hết hàng"}</div>
@@ -34,6 +39,7 @@ export function ProductPage() {
       </section>
     </div>
     <section className="spec-section"><div><span className="eyebrow">THÔNG TIN SẢN PHẨM</span><h2>Chi tiết làm nên khác biệt.</h2></div><dl>{product.attributes?.map((item) => <div key={item.attribute.key}><dt>{item.attribute.label}</dt><dd>{String(item.value)}{item.attribute.unit ? ` ${item.attribute.unit}` : ""}</dd></div>)}{product.categories?.length ? <div><dt>Danh mục</dt><dd>{product.categories.map((item) => item.category.name).join(", ")}</dd></div> : null}{product.spaces?.length ? <div><dt>Không gian phù hợp</dt><dd>{product.spaces.map((item) => item.space.name).join(", ")}</dd></div> : null}</dl></section>
+    {(related.data?.length??0)>1&&<section className="related-products"><div className="section-heading"><div><span className="eyebrow">CÙNG DANH MỤC</span><h2>Có thể bạn cũng thích.</h2></div><Link to={`/products?category=${product.categories?.[0]?.category.slug??""}`} className="text-link">Xem tất cả <ArrowRight size={14}/></Link></div><ProductGrid products={(related.data??[]).filter(item=>item.id!==product.id).slice(0,4)}/></section>}
   </div>;
 }
 

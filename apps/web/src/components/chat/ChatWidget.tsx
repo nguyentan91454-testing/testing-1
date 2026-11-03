@@ -1,38 +1,25 @@
 import { useState, type FormEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { ArrowUp, MessageCircle, X } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowUp, Check, MessageCircle, RotateCcw, Send, ShoppingBag, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
+import { formatVnd } from "../../lib/format";
 
-type Message = { role: "assistant" | "user"; text: string };
+type ChatProduct={id:string;slug:string;name:string;priceVnd:number;image:{url:string;alt:string}|null;variantId:string|null};
+type Message={role:"assistant"|"user";text:string;id?:string;products?:ChatProduct[];feedback?:number};
+const suggestions=["Đèn bàn ăn phong cách Bắc Âu","Phòng 20m² cần bao nhiêu lumen?","Gợi ý đèn cho phòng khách"];
 
 export function ChatWidget() {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [messages, setMessages] = useState<Message[]>([{ role: "assistant", text: "Chào bạn, mình có thể giúp chọn đèn theo diện tích phòng, chiều cao trần hoặc phong cách bạn yêu thích." }]);
-  const mutation = useMutation({
-    mutationFn: api.sendMessage,
-    onSuccess: (result) => setMessages((current) => [...current, { role: "assistant", text: result.answer }]),
-    onError: (error) => setMessages((current) => [...current, { role: "assistant", text: error instanceof Error ? error.message : "Mình chưa kết nối được. Bạn thử lại nhé." }]),
-  });
-
-  function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const message = text.trim();
-    if (!message || mutation.isPending) return;
-    setMessages((current) => [...current, { role: "user", text: message }]);
-    setText("");
-    mutation.mutate(message);
-  }
-
-  return (
-    <div className="chat-widget">
-      {open && <section className="chat-panel" aria-label="Tư vấn ánh sáng" aria-live="polite">
-        <header className="chat-header"><div className="chat-avatar">n.</div><div><strong>Chuyên viên Nhà Mình</strong><span>Tư vấn không gian & ánh sáng</span></div><button className="icon-button" onClick={() => setOpen(false)} aria-label="Đóng tư vấn"><X size={19} /></button></header>
-        <div className="chat-messages">{messages.map((message, index) => <p className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>{message.text}</p>)}{mutation.isPending && <p className="chat-bubble assistant typing">Đang tìm hiểu...</p>}</div>
-        <form className="chat-form" onSubmit={send}><input maxLength={500} value={text} onChange={(event) => setText(event.target.value)} placeholder="Bạn đang cần tìm gì?" aria-label="Tin nhắn tư vấn" /><button aria-label="Gửi tin nhắn" disabled={!text.trim() || mutation.isPending}><ArrowUp size={19} /></button></form>
-        <small className="chat-demo-note">Thông tin sản phẩm được tra từ dữ liệu demo.</small>
-      </section>}
-      <button className={`chat-launcher ${open ? "is-open" : ""}`} onClick={() => setOpen(!open)} aria-label={open ? "Đóng tư vấn" : "Mở tư vấn ánh sáng"}>{open ? <X /> : <><MessageCircle /><span>Tư vấn ánh sáng</span></>}</button>
-    </div>
-  );
+  const [open,setOpen]=useState(false);const [text,setText]=useState("");const [messages,setMessages]=useState<Message[]>([{role:"assistant",text:"Chào bạn, mình có thể giúp chọn đèn theo diện tích phòng, chiều cao trần hoặc phong cách bạn yêu thích."}]);
+  const [contactOpen,setContactOpen]=useState(false);const [contactName,setContactName]=useState("");const [contactPhone,setContactPhone]=useState("");const [contactNote,setContactNote]=useState("");const [contactError,setContactError]=useState("");const queryClient=useQueryClient();
+  const [addedVariant,setAddedVariant]=useState("");
+  const mutation=useMutation({mutationFn:(input:{message:string;contactDetails?:{name:string;phone:string}})=>api.sendChatMessage(input),onSuccess:(result)=>setMessages(current=>[...current,{role:"assistant",id:result.messageId,text:result.answer,products:(result as typeof result&{products?:ChatProduct[]}).products??[]}]),onError:(error)=>setMessages(current=>[...current,{role:"assistant",text:error instanceof Error?error.message:"Mình chưa kết nối được. Bạn thử lại nhé."}])});
+  const contactMutation=useMutation({mutationFn:api.createContactRequest});
+  const add=useMutation({mutationFn:(variantId:string)=>api.addCartItem(variantId,1),onSuccess:(cart,variantId)=>{queryClient.setQueryData(["cart"],cart);setAddedVariant(variantId);}});
+  const feedback=useMutation({mutationFn:({messageId,value}:{messageId:string;value:1|-1})=>api.chatFeedback(messageId,value),onSuccess:result=>setMessages(current=>current.map(message=>message.id===result.messageId?{...message,feedback:result.feedback}:message))});
+  const reset=useMutation({mutationFn:api.resetChat,onSuccess:()=>{setMessages([{role:"assistant",text:"Xin chào, mình có thể giúp bạn tìm đèn và chọn ánh sáng phù hợp cho căn phòng."}]);setText("");}});
+  function ask(input:string){const message=input.trim();if(!message||mutation.isPending)return;setMessages(current=>[...current,{role:"user",text:message}]);setText("");mutation.mutate({message});}
+  function send(event:FormEvent<HTMLFormElement>){event.preventDefault();ask(text);}
+  function requestContact(event:FormEvent<HTMLFormElement>){event.preventDefault();setContactError("");if(!/^0\d{9,10}$/.test(contactPhone.replace(/[\s()-]/g,""))){setContactError("Nhập số điện thoại Việt Nam hợp lệ.");return;}const message=`Tôi muốn được nhân viên gọi lại tư vấn${contactNote.trim()?`: ${contactNote.trim()}`:""}.`;setMessages(current=>[...current,{role:"user",text:"Yêu cầu nhân viên gọi lại tư vấn."}]);contactMutation.mutate({name:contactName,phone:contactPhone,message},{onSuccess:()=>{setMessages(current=>[...current,{role:"assistant",text:"Đã ghi nhận yêu cầu. Nhân viên sẽ liên hệ theo thông tin bạn để lại."}]);setContactOpen(false);setContactNote("");},onError:error=>setContactError(error instanceof Error?error.message:"Không gửi được yêu cầu.")});}
+  return <div className="chat-widget">{open&&<section className="chat-panel" aria-label="Tư vấn ánh sáng"><header className="chat-header"><div className="chat-avatar">n.</div><div><strong>Chuyên viên Nhà Mình</strong><span>Tư vấn không gian & ánh sáng</span></div><button className="chat-header-action" title="Bắt đầu hội thoại mới" aria-label="Bắt đầu hội thoại mới" disabled={reset.isPending} onClick={()=>reset.mutate()}><RotateCcw size={15}/></button><button className="icon-button" onClick={()=>setOpen(false)} aria-label="Đóng tư vấn"><X size={19}/></button></header><div className="chat-messages">{messages.map((message,index)=><div className={`chat-message ${message.role}`} key={message.id??`${message.role}-${index}`}><p className={`chat-bubble ${message.role}`}>{message.text}</p>{message.products?.length? <div className="chat-product-list">{message.products.map(product=><article className="chat-product-card" key={product.id}>{product.image?<img src={product.image.url} alt={product.image.alt}/>:<div className="chat-product-placeholder"><ShoppingBag size={17}/></div>}<div><Link to={`/products/${product.slug}`} onClick={()=>setOpen(false)}>{product.name}</Link><strong>{formatVnd(product.priceVnd)}</strong><div><Link to={`/products/${product.slug}`} onClick={()=>setOpen(false)}>Chi tiết</Link><button disabled={!product.variantId||add.isPending} onClick={()=>product.variantId&&add.mutate(product.variantId)}>{product.variantId===addedVariant?"Đã thêm":"Thêm vào giỏ"}</button></div></div></article>)}</div>:null}{message.role==="assistant"&&message.id&&<div className="chat-feedback"><span>Phản hồi này hữu ích?</span><button title="Hữu ích" aria-label="Hữu ích" disabled={feedback.isPending||message.feedback===1} onClick={()=>feedback.mutate({messageId:message.id!,value:1})}><ThumbsUp size={13}/></button><button title="Chưa hữu ích" aria-label="Chưa hữu ích" disabled={feedback.isPending||message.feedback===-1} onClick={()=>feedback.mutate({messageId:message.id!,value:-1})}><ThumbsDown size={13}/></button>{message.feedback&&<Check size={12}/>}</div>}</div>)}{messages.length===1&&!mutation.isPending&&!contactOpen&&<div className="chat-suggestions">{suggestions.map(s=><button key={s} onClick={()=>ask(s)}>{s}</button>)}</div>}{mutation.isPending&&<p className="chat-bubble assistant typing">Đang tìm hiểu...</p>}</div>{contactOpen?<form className="chat-contact-form" onSubmit={requestContact}><div className="chat-contact-head"><strong>Để lại thông tin tư vấn</strong><button type="button" className="bare-button" onClick={()=>setContactOpen(false)} aria-label="Đóng"><X size={15}/></button></div><input required minLength={2} maxLength={120} value={contactName} onChange={e=>setContactName(e.target.value)} placeholder="Tên của bạn"/><input required type="tel" value={contactPhone} onChange={e=>setContactPhone(e.target.value)} placeholder="Số điện thoại"/><input maxLength={500} value={contactNote} onChange={e=>setContactNote(e.target.value)} placeholder="Bạn cần tư vấn gì? (không bắt buộc)"/>{contactError&&<small className="inline-error">{contactError}</small>}<button className="chat-contact-submit" disabled={contactMutation.isPending}>{contactMutation.isPending?"Đang gửi":"Gửi yêu cầu"}<Send size={14}/></button></form>:<><button className="chat-contact-trigger" onClick={()=>setContactOpen(true)}>Để lại số điện thoại để được gọi lại</button><form className="chat-form" onSubmit={send}><input maxLength={500} value={text} onChange={event=>setText(event.target.value)} placeholder="Bạn đang cần tìm gì?" aria-label="Tin nhắn tư vấn"/><button aria-label="Gửi tin nhắn" disabled={!text.trim()||mutation.isPending}><ArrowUp size={19}/></button></form><small className="chat-demo-note">Thông tin sản phẩm được tra từ dữ liệu demo.</small></>}</section>}<button className={`chat-launcher ${open?"is-open":""}`} onClick={()=>setOpen(!open)} aria-label={open?"Đóng tư vấn":"Mở tư vấn ánh sáng"}>{open?<X/>:<><MessageCircle/><span>Tư vấn ánh sáng</span></>}</button></div>;
 }

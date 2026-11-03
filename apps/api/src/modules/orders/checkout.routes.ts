@@ -25,6 +25,7 @@ const checkoutSchema = z.object({
 
 export const checkoutRouter = Router();
 const mockPaymentLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
+const publicTrackingLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false });
 
 function checkoutPayment(orderCode: string, payment: { id: string; type: "FULL" | "DEPOSIT" | "COD"; amountVnd: number; status: "PENDING" | "SUCCEEDED" | "FAILED" } | null) {
   if (!payment || payment.status !== "PENDING") return null;
@@ -94,6 +95,40 @@ checkoutRouter.get("/track/:orderCode", async (request, response, next) => {
       items: order.items,
       payment: checkoutPayment(order.code, payment),
     } });
+  } catch (error) { next(error); }
+});
+
+checkoutRouter.post("/track-verify", publicTrackingLimiter, async (request, response, next) => {
+  try {
+    const input = z.object({ orderCode: z.string().trim().min(8).max(40), phone: z.string().trim().min(9).max(24) }).parse(request.body);
+    const order = await prisma.order.findFirst({
+      where: { code: input.orderCode.toUpperCase(), phone: normalizePhone(input.phone) },
+      select: {
+        code: true, orderStatus: true, paymentStatus: true, totalVnd: true, paidVnd: true, codAmountVnd: true,
+        createdAt: true, reservationExpiresAt: true,
+        items: { select: { productName: true, variantName: true, quantity: true } },
+        payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } },
+      },
+    });
+    if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng phù hợp với thông tin đã nhập", "ORDER_TRACKING_NOT_FOUND");
+    const payment = order.payments[0] ?? null;
+    response.json({ success: true, data: {
+      code: order.code, orderStatus: order.orderStatus, paymentStatus: order.paymentStatus,
+      totalVnd: order.totalVnd, paidVnd: order.paidVnd, codAmountVnd: order.codAmountVnd,
+      createdAt: order.createdAt, reservationExpiresAt: order.reservationExpiresAt,
+      items: order.items,
+      payment: checkoutPayment(order.code, payment),
+    } });
+  } catch (error) { next(error); }
+});
+
+checkoutRouter.post("/track-verify/confirm-payment", publicTrackingLimiter, async (request, response, next) => {
+  try {
+    if (env.NODE_ENV === "production" && env.ALLOW_MOCK_PAYMENTS !== "true") throw new HttpError(404, "Không tìm thấy tài nguyên", "NOT_FOUND");
+    const input = z.object({ orderCode: z.string().trim().min(8).max(40), phone: z.string().trim().min(9).max(24) }).parse(request.body);
+    const order = await prisma.order.findFirst({ where: { code: input.orderCode.toUpperCase(), phone: normalizePhone(input.phone) }, select: { id: true } });
+    if (!order) throw new HttpError(404, "Không tìm thấy đơn hàng phù hợp với thông tin đã nhập", "ORDER_TRACKING_NOT_FOUND");
+    response.json({ success: true, data: await confirmMockPayment(order.id) });
   } catch (error) { next(error); }
 });
 

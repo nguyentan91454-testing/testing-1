@@ -12,6 +12,7 @@ const { prismaMock } = vi.hoisted(() => ({
     setting: { findUnique: vi.fn() },
     aiUsage: { findUnique: vi.fn(), aggregate: vi.fn() },
     product: { findMany: vi.fn() },
+    contactRequest: { create: vi.fn() },
   },
 }));
 vi.mock("../../lib/prisma.js", () => ({ prisma: prismaMock }));
@@ -49,6 +50,7 @@ beforeEach(() => {
   prismaMock.aiUsage.findUnique.mockReset();
   prismaMock.aiUsage.aggregate.mockReset();
   prismaMock.product.findMany.mockReset();
+  prismaMock.contactRequest.create.mockReset();
   prismaMock.chatSession.findUnique.mockResolvedValue(null);
   prismaMock.chatSession.create.mockImplementation(({ data }: { data: { sessionId: string; userId: null } }) => Promise.resolve({ id: "session-db-id", ...data }));
   prismaMock.chatMessage.count.mockResolvedValue(0);
@@ -60,6 +62,7 @@ beforeEach(() => {
     categories: [], spaces: [], styles: [], images: [], attributes: [],
     variants: [{ id: "variant-id", sku: "OT-1", priceVnd: 1000000, stockQty: 2, attributes: [] }],
   }]);
+  prismaMock.contactRequest.create.mockResolvedValue({ id: "contact-request-id", status: "NEW" });
 });
 
 describe("chat message endpoint", () => {
@@ -86,6 +89,18 @@ describe("chat message endpoint", () => {
       body: JSON.stringify({ message: "x".repeat(501) }),
     });
     expect(response.status).toBe(400);
+    expect(prismaMock.chatSession.create).not.toHaveBeenCalled();
+  });
+
+  it("records a callback request directly without creating a chat session", async () => {
+    const response = await fetch(`${baseUrl}/chat/contact-requests`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Nguyễn An", phone: "+84 912 345 678", message: "Tư vấn đèn cho phòng khách" }),
+    });
+    const body = await response.json() as { data: { id: string; status: string } };
+    expect(response.status).toBe(201);
+    expect(body.data).toEqual({ id: "contact-request-id", status: "NEW" });
+    expect(prismaMock.contactRequest.create).toHaveBeenCalledWith({ data: { name: "Nguyễn An", phone: "0912345678", message: "Tư vấn đèn cho phòng khách" } });
     expect(prismaMock.chatSession.create).not.toHaveBeenCalled();
   });
 });
