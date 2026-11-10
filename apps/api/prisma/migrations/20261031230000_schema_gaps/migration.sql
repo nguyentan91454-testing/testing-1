@@ -62,7 +62,7 @@ COMMENT ON COLUMN "shipments"."status" IS
     'Mapped from GHTK/mock webhook: pending, picked_up, in_transit, delivered, returned, failed';
 
 -- 8. Index hỗ trợ dashboard Admin: đơn theo ngày (cast to DATE, IMMUTABLE)
-CREATE INDEX "orders_created_date_idx" ON "orders"(("created_at"::date));
+CREATE INDEX "orders_created_date_idx" ON "orders"(((created_at AT TIME ZONE 'UTC')::date));
 CREATE INDEX "orders_delivered_date_idx" ON "orders"("delivered_at")
     WHERE "delivered_at" IS NOT NULL;
 
