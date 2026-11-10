@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Menu, Search, ShoppingBag, UserRound, X } from "lucide-react";
+import { ArrowRight, Compass, Lightbulb, Menu, PackageSearch, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { api } from "../lib/api";
 import { ChatWidget } from "./chat/ChatWidget";
 
@@ -13,6 +13,7 @@ export function StorefrontLayout() {
   const queryClient = useQueryClient();
   const cartQuery = useQuery({ queryKey: ["cart"], queryFn: api.cart });
   const customer = useQuery({ queryKey: ["customer"], queryFn: api.customer, retry: false });
+  const categories = useQuery({ queryKey: ["categories"], queryFn: api.categories });
   const logout = useMutation({ mutationFn: api.customerLogout, onSuccess: () => { queryClient.setQueryData(["customer"], null); queryClient.invalidateQueries({ queryKey: ["cart"] }); } });
   const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
@@ -53,21 +54,24 @@ export function StorefrontLayout() {
         </div>
         <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} aria-label="Điều hướng chính">
           <div className="wrap nav-inner">
-            <NavLink to="/products?space=phong-khach" onClick={() => setMenuOpen(false)}>Phòng khách</NavLink>
-            <NavLink to="/products?space=ban-an" onClick={() => setMenuOpen(false)}>Bàn ăn</NavLink>
-            <NavLink to="/products?space=phong-ngu" onClick={() => setMenuOpen(false)}>Phòng ngủ</NavLink>
-            <NavLink to="/products?style=bac-au" onClick={() => setMenuOpen(false)}>Bắc Âu</NavLink>
-            <NavLink to="/products?style=indochine" onClick={() => setMenuOpen(false)}>Indochine</NavLink>
-            <a href="/#lighting" onClick={() => setMenuOpen(false)}>Tính ánh sáng <span className="nav-new">CÔNG CỤ</span></a>
-            <a href="/#spaces" className="nav-right" onClick={() => setMenuOpen(false)}>Chọn theo không gian <ArrowRight size={14} /></a>
+            <NavLink to="/products" onClick={() => setMenuOpen(false)}>Tất cả sản phẩm</NavLink>
+            {(categories.data ?? []).slice(0, 5).map((category) => <NavLink key={category.id} to={"/products?category=" + category.slug} onClick={() => setMenuOpen(false)}>{category.name}</NavLink>)}
+            <Link to="/#lighting" onClick={() => setMenuOpen(false)}>Tính ánh sáng <span className="nav-new">CÔNG CỤ</span></Link>
+            <Link to="/#spaces" className="nav-right" onClick={() => setMenuOpen(false)}>Chọn theo không gian <ArrowRight size={14} /></Link>
           </div>
+        </nav>
+        <nav className="shortcut-nav wrap" aria-label="Lối tắt">
+          <Link to="/products"><PackageSearch size={15} /> Sản phẩm</Link>
+          <Link to="/#spaces"><Compass size={15} /> Chọn theo phòng</Link>
+          <Link to="/#lighting"><Lightbulb size={15} /> Tính ánh sáng</Link>
+          <Link to="/orders/track"><PackageSearch size={15} /> Tra cứu đơn</Link>
         </nav>
       </header>
       <main><Outlet /></main>
       <footer className="site-footer">
         <div className="wrap footer-top">
           <div><Link to="/" className="wordmark footer-wordmark"><span className="wordmark-mark">K</span><span>Konyappi Shop<small>LIGHTING & LIVING</small></span></Link><p>Ánh sáng dịu dàng cho những điều thân thuộc.</p></div>
-          <div className="footer-links"><div><strong>Khám phá</strong><Link to="/products">Tất cả sản phẩm</Link><a href="/#spaces">Theo không gian</a><a href="/#lighting">Tính ánh sáng</a><Link to="/orders/track">Tra cứu đơn hàng</Link></div><div><strong>Thông tin</strong><Link to="/chinh-sach-bao-hanh">Chính sách bảo hành</Link><Link to="/chinh-sach-van-chuyen-cod">Vận chuyển & COD</Link><Link to="/chinh-sach-quyen-rieng-tu">Quyền riêng tư</Link><Link to="/ghi-cong-hinh-anh">Ghi công hình ảnh</Link><Link to="/gioi-thieu-do-an">Giới thiệu đồ án</Link><span>Không nhận thanh toán thật</span></div></div>
+          <div className="footer-links"><div><strong>Khám phá</strong><Link to="/products">Tất cả sản phẩm</Link><Link to="/#spaces">Theo không gian</Link><Link to="/#lighting">Tính ánh sáng</Link><Link to="/orders/track">Tra cứu đơn hàng</Link></div><div><strong>Thông tin</strong><Link to="/chinh-sach-bao-hanh">Chính sách bảo hành</Link><Link to="/chinh-sach-van-chuyen-cod">Vận chuyển & COD</Link><Link to="/chinh-sach-quyen-rieng-tu">Quyền riêng tư</Link><Link to="/ghi-cong-hinh-anh">Ghi công hình ảnh</Link><Link to="/gioi-thieu-do-an">Giới thiệu đồ án</Link><span>Không nhận thanh toán thật</span></div></div>
         </div>
         <div className="wrap image-credit">Ảnh không gian minh họa từ <a href="https://unsplash.com/license" target="_blank" rel="noreferrer">Unsplash</a>.</div>
         <div className="wrap footer-bottom"><span>© 2026 Konyappi Shop</span><span>Designed for the way home feels.</span></div>
