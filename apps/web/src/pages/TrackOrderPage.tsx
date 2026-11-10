@@ -9,7 +9,7 @@ const statusLabels: Record<string,string> = { PENDING:"Đang chờ xác nhận",
 const stages=["PENDING","CONFIRMED","PACKING","SHIPPED","DELIVERED"];
 
 export function TrackOrderPage(){
-  usePageMeta("Tra cứu đơn hàng","Theo dõi trạng thái đơn hàng demo Nhà Mình.");
+  usePageMeta("Tra cứu đơn hàng","Theo dõi trạng thái đơn hàng demo Konyappi Shop.");
   const [params]=useSearchParams();const [code,setCode]=useState(params.get("code")??"");const [phone,setPhone]=useState("");const [order,setOrder]=useState<any>();const [error,setError]=useState("");const [loading,setLoading]=useState(false);const [qr,setQr]=useState<any>();
   async function lookup(event?:FormEvent){event?.preventDefault();setLoading(true);setError("");setOrder(undefined);setQr(undefined);try{const result=await api.trackOrderByPhone(code.trim().toUpperCase(),phone.trim());setOrder(result);setQr(result.payment);}catch(e){setError(e instanceof Error?e.message:"Không thể tra cứu đơn hàng.");}finally{setLoading(false);}}
   async function confirmPayment(){try{await api.confirmTrackedPaymentByPhone(order.code,phone);await lookup();}catch(e){setError(e instanceof Error?e.message:"Không thể xác nhận thanh toán demo.");}}

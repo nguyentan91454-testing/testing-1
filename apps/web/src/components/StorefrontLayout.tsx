@@ -39,7 +39,7 @@ export function StorefrontLayout() {
       <header className="site-header">
         <div className="header-main wrap">
           <button className="icon-button mobile-menu-trigger" aria-label={menuOpen ? "Đóng menu" : "Mở menu"} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
-          <Link to="/" className="wordmark" aria-label="Nhà Mình trang chủ"><span className="wordmark-mark">n.</span><span>nhà mình<small>LIGHTING & LIVING</small></span></Link>
+          <Link to="/" className="wordmark" aria-label="Konyappi Shop trang chủ"><span className="wordmark-mark">K</span><span>Konyappi Shop<small>LIGHTING & LIVING</small></span></Link>
           <form className="header-search" onSubmit={search} role="search">
             <Search size={18} aria-hidden="true" />
             <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Tìm đèn, không gian, phong cách..." aria-label="Tìm sản phẩm" />
@@ -66,11 +66,11 @@ export function StorefrontLayout() {
       <main><Outlet /></main>
       <footer className="site-footer">
         <div className="wrap footer-top">
-          <div><Link to="/" className="wordmark footer-wordmark"><span className="wordmark-mark">n.</span><span>nhà mình<small>LIGHTING & LIVING</small></span></Link><p>Ánh sáng dịu dàng cho những điều thân thuộc.</p></div>
+          <div><Link to="/" className="wordmark footer-wordmark"><span className="wordmark-mark">K</span><span>Konyappi Shop<small>LIGHTING & LIVING</small></span></Link><p>Ánh sáng dịu dàng cho những điều thân thuộc.</p></div>
           <div className="footer-links"><div><strong>Khám phá</strong><Link to="/products">Tất cả sản phẩm</Link><a href="/#spaces">Theo không gian</a><a href="/#lighting">Tính ánh sáng</a><Link to="/orders/track">Tra cứu đơn hàng</Link></div><div><strong>Thông tin</strong><Link to="/chinh-sach-bao-hanh">Chính sách bảo hành</Link><Link to="/chinh-sach-van-chuyen-cod">Vận chuyển & COD</Link><Link to="/chinh-sach-quyen-rieng-tu">Quyền riêng tư</Link><Link to="/ghi-cong-hinh-anh">Ghi công hình ảnh</Link><Link to="/gioi-thieu-do-an">Giới thiệu đồ án</Link><span>Không nhận thanh toán thật</span></div></div>
         </div>
         <div className="wrap image-credit">Ảnh không gian minh họa từ <a href="https://unsplash.com/license" target="_blank" rel="noreferrer">Unsplash</a>.</div>
-        <div className="wrap footer-bottom"><span>© 2026 Nhà Mình</span><span>Designed for the way home feels.</span></div>
+        <div className="wrap footer-bottom"><span>© 2026 Konyappi Shop</span><span>Designed for the way home feels.</span></div>
       </footer>
       <ChatWidget />
     </>

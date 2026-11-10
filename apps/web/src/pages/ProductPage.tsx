@@ -9,7 +9,7 @@ import { ProductGrid } from "../components/ProductGrid";
 
 export function ProductPage() {
   const { slug = "" } = useParams();
-  usePageMeta(queryTitle(slug), "Thông tin thiết kế, phiên bản và thông số của sản phẩm Nhà Mình.");
+  usePageMeta(queryTitle(slug), "Thông tin thiết kế, phiên bản và thông số của sản phẩm Konyappi Shop.");
   const [variantIndex, setVariantIndex] = useState(0);
   const [imageIndex,setImageIndex]=useState(0);
   const queryClient = useQueryClient();

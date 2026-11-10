@@ -25,7 +25,7 @@ export function HomePage() {
 
   return (
     <>
-      <section className="hero" aria-label="Bộ sưu tập ánh sáng Nhà Mình">
+      <section className="hero" aria-label="Bộ sưu tập ánh sáng Konyappi Shop">
         <img className="hero-image" src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=2200&q=88" alt="Phòng khách sáng thoáng với ánh sáng dịu và chất liệu gỗ tự nhiên" fetchPriority="high" />
         <div className="hero-shade" />
         <div className="wrap hero-content"><span className="hero-kicker"><i /> CHỌN ÁNH SÁNG CHO TỔ ẤM</span><h1>Ánh sáng dịu,<br />nhà mình vui.</h1><p>Những thiết kế đèn được chọn theo không gian, chiều cao trần và nhịp sống của bạn.</p><div className="hero-actions"><Link to="/products" className="button button-lime">Khám phá bộ sưu tập <ArrowRight size={17} /></Link><a href="#spaces" className="hero-secondary">Tìm theo không gian <ArrowDown size={15} /></a></div></div>
