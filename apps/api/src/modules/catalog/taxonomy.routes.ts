@@ -8,7 +8,7 @@ taxonomyRouter.get("/categories", async (_request, response, next) => {
     const data = await prisma.category.findMany({
       where: { isActive: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      select: { id: true, slug: true, name: true, sortOrder: true },
+      select: { id: true, slug: true, name: true, parentId: true, sortOrder: true },
     });
     response.json({ success: true, data });
   } catch (error) { next(error); }

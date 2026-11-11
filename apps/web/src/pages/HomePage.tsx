@@ -25,6 +25,16 @@ export function HomePage() {
 
   return (
     <>
+      <section className="catalog-departments wrap" aria-label="Shop by department">
+        <Link to="/products?category=home-appliances" className="catalog-department-tile">
+          <img src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1200&q=84" alt="Thiết bị gia dụng trong không gian bếp hiện đại" />
+          <span><small>HOME APPLIANCES</small><strong>Thiết bị cho nhịp sống mỗi ngày</strong></span>
+        </Link>
+        <Link to="/products?category=home-decor" className="catalog-department-tile">
+          <img src="https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1200&q=84" alt="Không gian sống với đồ trang trí và nội thất" />
+          <span><small>HOME DECOR</small><strong>Chi tiết tạo nên không gian riêng</strong></span>
+        </Link>
+      </section>
       <section className="hero" aria-label="Bộ sưu tập ánh sáng Konyappi Shop">
         <img className="hero-image" src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=2200&q=88" alt="Phòng khách sáng thoáng với ánh sáng dịu và chất liệu gỗ tự nhiên" fetchPriority="high" />
         <div className="hero-shade" />

@@ -63,7 +63,10 @@ function productWhere(input: z.infer<typeof searchProductsSchema>): Prisma.Produ
       ...(input.minPrice === undefined ? {} : { gte: input.minPrice }),
       ...(input.maxPrice === undefined ? {} : { lte: input.maxPrice }),
     } } },
-    ...(input.category ? { categories: { some: { category: { slug: input.category } } } } : {}),
+    ...(input.category ? { categories: { some: { category: { OR: [
+      { slug: input.category },
+      { parent: { slug: input.category } },
+    ] } } } } : {}),
     ...(input.space ? { spaces: { some: { space: { slug: input.space } } } } : {}),
     ...(input.style ? { styles: { some: { style: { slug: input.style } } } } : {}),
   };
@@ -104,9 +107,11 @@ export async function executeChatTool(name: string, rawArgs: unknown, context: C
     case "recommend_products": {
       const input = toolSchemas.recommend_products.parse(rawArgs);
       if (!input.productSlug && !input.space && !input.style) return { needsContext: true, message: "Cần biết sản phẩm, không gian hoặc phong cách để tạo gợi ý phù hợp." };
-      const source = input.productSlug ? await prisma.product.findFirst({ where: { slug: input.productSlug, status: "ACTIVE", isActive: true }, select: { id: true, categories: { select: { categoryId: true } }, spaces: { select: { spaceId: true } }, styles: { select: { styleId: true } } } }) : null;
+      const source = input.productSlug ? await prisma.product.findFirst({ where: { slug: input.productSlug, status: "ACTIVE", isActive: true }, select: { id: true, categories: { select: { categoryId: true } }, spaces: { select: { spaceId: true } }, styles: { select: { styleId: true } }, attributes: { select: { attribute: { select: { key: true } }, value: true } } } }) : null;
       const similar = source ? await prisma.itemSimilarity.findMany({ where: { productId: source.id, similar: { status: "ACTIVE", isActive: true, variants: { some: { isAvailable: true, stockQty: { gt: 0 } } } } }, orderBy: { score: "desc" }, take: input.limit, select: { score: true, source: true, similar: { select: productSummary } } }) : [];
       if (similar.length) return { products: similar.map((item) => ({ ...compactProduct(item.similar), recommendationScore: item.score, recommendationSource: item.source })) };
+      const rawTags = source?.attributes.find(({ attribute }) => attribute.key === "companion_tags")?.value;
+      const sourceTags = new Set(Array.isArray(rawTags) ? rawTags.filter((tag): tag is string => typeof tag === "string") : []);
       const products = await prisma.product.findMany({
         where: {
           status: "ACTIVE", isActive: true,
@@ -115,13 +120,19 @@ export async function executeChatTool(name: string, rawArgs: unknown, context: C
             ...(source.categories.length ? [{ categories: { some: { categoryId: { in: source.categories.map((item) => item.categoryId) } } } }] : []),
             ...(source.spaces.length ? [{ spaces: { some: { spaceId: { in: source.spaces.map((item) => item.spaceId) } } } }] : []),
             ...(source.styles.length ? [{ styles: { some: { styleId: { in: source.styles.map((item) => item.styleId) } } } }] : []),
+            ...[...sourceTags].map((tag) => ({ attributes: { some: { attribute: { key: "companion_tags" }, value: { array_contains: [tag] } } } })),
           ] } : {}),
           ...(input.space ? { spaces: { some: { space: { slug: input.space } } } } : {}),
           ...(input.style ? { styles: { some: { style: { slug: input.style } } } } : {}),
         },
-        select: productSummary, orderBy: { minPriceVnd: "asc" }, take: input.limit,
+        select: productSummary, orderBy: { minPriceVnd: "asc" }, take: Math.max(input.limit * 5, 15),
       });
-      return { products: products.map(compactProduct), method: "catalog_fallback" };
+      const overlap = (product: typeof products[number]) => {
+        const value = product.attributes.find(({ attribute }) => attribute.key === "companion_tags")?.value;
+        return Array.isArray(value) ? value.filter((tag) => typeof tag === "string" && sourceTags.has(tag)).length : 0;
+      };
+      const ranked = [...products].sort((left, right) => overlap(right) - overlap(left));
+      return { products: ranked.slice(0, input.limit).map(compactProduct), method: ranked.some((product) => overlap(product) > 0) ? "companion_tags" : "catalog_fallback" };
     }
     case "get_order_status": {
       const input = toolSchemas.get_order_status.parse(rawArgs);

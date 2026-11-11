@@ -139,6 +139,9 @@ model Category {
   id        String    @id @default(uuid()) @db.Uuid
   slug      String    @unique
   name      String
+  parentId  String?   @map("parent_id") @db.Uuid
+  parent    Category? @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryTree")
   sortOrder Int       @default(0) @map("sort_order")
   isActive  Boolean   @default(true) @map("is_active")
   products  ProductCategory[]

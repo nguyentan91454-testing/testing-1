@@ -9,6 +9,7 @@ export interface TaxonomyItem {
   id: string;
   slug: string;
   name: string;
+  parentId?: string | null;
   imageUrl?: string | null;
   sortOrder: number;
 }

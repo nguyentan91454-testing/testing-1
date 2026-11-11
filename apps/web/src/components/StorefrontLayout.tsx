@@ -55,7 +55,7 @@ export function StorefrontLayout() {
         <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} aria-label="Điều hướng chính">
           <div className="wrap nav-inner">
             <NavLink to="/products" onClick={() => setMenuOpen(false)}>Tất cả sản phẩm</NavLink>
-            {(categories.data ?? []).slice(0, 5).map((category) => <NavLink key={category.id} to={"/products?category=" + category.slug} onClick={() => setMenuOpen(false)}>{category.name}</NavLink>)}
+            {(categories.data ?? []).filter((category) => !category.parentId).map((category) => <NavLink key={category.id} to={"/products?category=" + category.slug} onClick={() => setMenuOpen(false)}>{category.name}</NavLink>)}
             <Link to="/#lighting" onClick={() => setMenuOpen(false)}>Tính ánh sáng <span className="nav-new">CÔNG CỤ</span></Link>
             <Link to="/#spaces" className="nav-right" onClick={() => setMenuOpen(false)}>Chọn theo không gian <ArrowRight size={14} /></Link>
           </div>

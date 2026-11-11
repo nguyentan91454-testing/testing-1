@@ -64,4 +64,23 @@ describe("chat tool registry", () => {
     expect(prismaMock.contactRequest.create).toHaveBeenCalledWith({ data: { name: "Demo", phone: "0900000000", message: "Gọi lại để tư vấn" } });
     expect(JSON.stringify(result)).not.toContain("0900000000");
   });
+
+  it("uses companion tags to rank catalog cross-sell results when similarity data is empty", async () => {
+    prismaMock.product.findFirst.mockResolvedValue({
+      id: "coffee-maker", categories: [{ categoryId: "kitchen" }], spaces: [{ spaceId: "kitchen" }], styles: [],
+      attributes: [{ attribute: { key: "companion_tags" }, value: ["coffee", "kitchen"] }],
+    });
+    prismaMock.itemSimilarity.findMany.mockResolvedValue([]);
+    const product = (slug: string, tags: string[]) => ({
+      id: slug, slug, name: slug, description: "Demo", minPriceVnd: 1000,
+      categories: [], spaces: [], styles: [], images: [], variants: [],
+      attributes: [{ attribute: { key: "companion_tags" }, value: tags }],
+    });
+    prismaMock.product.findMany.mockResolvedValue([product("random", ["plant"]), product("coffee-tray", ["coffee", "kitchen"])]);
+
+    const result = await executeChatTool("recommend_products", { productSlug: "coffee-maker", limit: 1 }, { sessionId: "session" });
+
+    expect(result).toMatchObject({ method: "companion_tags", products: [{ slug: "coffee-tray" }] });
+    expect(prismaMock.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 15 }));
+  });
 });

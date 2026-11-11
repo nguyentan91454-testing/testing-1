@@ -37,7 +37,10 @@ catalogRouter.get("/", async (request, response, next) => {
       `);
       filters.push({ id: { in: matches.map((match) => match.id) } });
     }
-    if (query.category) filters.push({ categories: { some: { category: { slug: query.category } } } });
+    if (query.category) filters.push({ categories: { some: { category: { OR: [
+      { slug: query.category },
+      { parent: { slug: query.category } },
+    ] } } } });
     if (query.space) filters.push({ spaces: { some: { space: { slug: query.space } } } });
     if (query.style) filters.push({ styles: { some: { style: { slug: query.style } } } });
     if (query.minPrice !== undefined || query.maxPrice !== undefined) {
