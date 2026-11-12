@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import argon2 from "argon2";
 import { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { CodeChallengeMethod, OAuth2Client } from "google-auth-library";
@@ -22,10 +23,61 @@ const oauthCookieOptions = {
 };
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
+const dummyPasswordHash = await argon2.hash("not-a-real-user-password");
+const credentialsSchema = z.object({
+  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(200),
+});
+const registerSchema = credentialsSchema.extend({ name: z.string().trim().min(2).max(120) });
 
 export const customerAuthRouter = Router();
 const googleStartLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
 const googleCallbackLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false });
+const credentialsLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
+
+async function createCustomerSession(userId: string) {
+  const sessionId = randomUUID();
+  const expiresAt = new Date(Date.now() + sessionLifetimeMs);
+  const token = await new SignJWT({ role: "customer" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setJti(sessionId)
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(accessSecret);
+  await prisma.customerSession.create({ data: { id: sessionId, userId, tokenHash: hashSessionToken(token), expiresAt } });
+  return token;
+}
+
+customerAuthRouter.post("/register", credentialsLimiter, async (request, response, next) => {
+  try {
+    const input = registerSchema.parse(request.body);
+    const passwordHash = await argon2.hash(input.password);
+    const user = await prisma.user.create({ data: { email: input.email, name: input.name, passwordHash } });
+    const token = await createCustomerSession(user.id);
+    response.cookie(customerCookieName, token, customerCookieOptions);
+    response.status(201).json({ success: true, data: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      next(new HttpError(409, "Email này đã được đăng ký. Hãy đăng nhập bằng mật khẩu hoặc tiếp tục với Google.", "EMAIL_ALREADY_REGISTERED"));
+      return;
+    }
+    next(error);
+  }
+});
+
+customerAuthRouter.post("/login", credentialsLimiter, async (request, response, next) => {
+  try {
+    const input = credentialsSchema.parse(request.body);
+    const user = await prisma.user.findUnique({ where: { email: input.email } });
+    const valid = await argon2.verify(user?.passwordHash ?? dummyPasswordHash, input.password).catch(() => false);
+    if (!user || !valid) throw new HttpError(401, "Email hoặc mật khẩu không đúng.", "INVALID_CREDENTIALS");
+    if (user.status !== "ACTIVE") throw new HttpError(403, "Tài khoản này đã bị vô hiệu hóa.", "CUSTOMER_ACCOUNT_DISABLED");
+    const token = await createCustomerSession(user.id);
+    response.cookie(customerCookieName, token, customerCookieOptions);
+    response.json({ success: true, data: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } });
+  } catch (error) { next(error); }
+});
 
 function googleClient(): OAuth2Client | null {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return null;
@@ -35,6 +87,7 @@ function googleClient(): OAuth2Client | null {
 
 function redirectToApp(response: Response, result: "success" | "cancelled") {
   const url = new URL(env.APP_BASE_URL);
+  url.pathname = "/login";
   if (result === "success") url.searchParams.set("auth", "success");
   else url.searchParams.set("auth_error", "cancelled");
   response.redirect(url.toString());
@@ -92,8 +145,6 @@ customerAuthRouter.get("/google/callback", googleCallbackLimiter, async (request
     const identity = readGoogleIdentity(ticket.getPayload() ?? {}, nonce);
     if (!identity) throw new HttpError(401, "Google account identity could not be verified", "GOOGLE_IDENTITY_INVALID");
 
-    const sessionId = randomUUID();
-    const expiresAt = new Date(Date.now() + sessionLifetimeMs);
     const session = await prisma.$transaction(async (tx) => {
       let user = await tx.user.findUnique({ where: { googleSub: identity.googleSub } });
       if (!user) {
@@ -108,18 +159,11 @@ customerAuthRouter.get("/google/callback", googleCallbackLimiter, async (request
         user = await tx.user.update({ where: { id: user.id }, data: { name: identity.name, avatarUrl: identity.avatarUrl } });
       }
       if (user.status !== "ACTIVE") throw new HttpError(403, "This customer account is disabled", "CUSTOMER_ACCOUNT_DISABLED");
-      const token = await new SignJWT({ role: "customer" })
-        .setProtectedHeader({ alg: "HS256" })
-        .setSubject(user.id)
-        .setJti(sessionId)
-        .setIssuedAt()
-        .setExpirationTime("7d")
-        .sign(accessSecret);
-      await tx.customerSession.create({ data: { id: sessionId, userId: user.id, tokenHash: hashSessionToken(token), expiresAt } });
-      return { token, user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } };
+      return { user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } };
     }, { isolationLevel: "Serializable" });
 
-    response.cookie(customerCookieName, session.token, customerCookieOptions);
+    const token = await createCustomerSession(session.user.id);
+    response.cookie(customerCookieName, token, customerCookieOptions);
     redirectToApp(response, "success");
   } catch (error) { next(error); }
 });

@@ -24,7 +24,7 @@ export function CartPage() {
   const clear = useMutation({ mutationFn: api.clearCart, onSuccess: (value) => queryClient.setQueryData(["cart"], value) });
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState("");
-  const coupon = useMutation({ mutationFn: api.applyCoupon, onSuccess: (value) => { queryClient.setQueryData(["cart"], value); setCouponCode(""); setCouponError(""); }, onError: (error: any) => setCouponError(error.code === "COUPON_LOGIN_REQUIRED" ? "Đăng nhập Google để sử dụng mã giảm giá." : error.message) });
+  const coupon = useMutation({ mutationFn: api.applyCoupon, onSuccess: (value) => { queryClient.setQueryData(["cart"], value); setCouponCode(""); setCouponError(""); }, onError: (error: any) => setCouponError(error.code === "COUPON_LOGIN_REQUIRED" ? "Bạn cần đăng nhập để dùng mã giảm giá. Mở trang đăng nhập để tiếp tục." : error.message) });
   const removeCoupon = useMutation({ mutationFn: api.removeCoupon, onSuccess: (value) => { queryClient.setQueryData(["cart"], value); setCouponError(""); } });
 
   if (cart.isLoading) return <div className="wrap page-pending">Đang tải giỏ hàng...</div>;

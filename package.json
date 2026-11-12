@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@12.5.1",
   "scripts": {
-    "dev": "docker compose up -d && pnpm --parallel --filter @commerce/api --filter @commerce/web dev",
+    "dev": "docker compose up -d --wait && pnpm db:generate && pnpm --filter @commerce/api db:deploy && pnpm db:seed && pnpm --parallel --filter @commerce/api --filter @commerce/web dev",
     "dev:all": "pnpm --parallel --filter @commerce/api --filter @commerce/web dev",
     "dev:web": "pnpm --filter @commerce/web dev",
     "dev:api": "pnpm --filter @commerce/api dev",
@@ -15,6 +15,11 @@
     "db:generate": "pnpm --filter @commerce/api db:generate",
     "db:migrate": "pnpm --filter @commerce/api db:migrate",
     "db:seed": "pnpm --filter @commerce/api db:seed"
+  },
+  "devDependencies": {
+    "prisma": "^8.0.0-rc.33"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.10.1"
   }
 }
-

@@ -1,17 +1,24 @@
 # Home & Decor Commerce
 
+## Quick start
+
+Requirements: Node.js 22+, pnpm 12+, and Docker Desktop running.
+
+After cloning the project, run `pnpm install` once. Ensure `.env` exists (copy `.env.example` if needed), then start the full local stack with:
+
+```powershell
+pnpm dev
+```
+
+This starts the Docker services, waits for them to become healthy, generates the Prisma client, applies database migrations, and runs the API and storefront. Open `http://localhost:5173`.
+
 Public menu filters: `GET /api/v1/categories` (active categories only), `GET /api/v1/spaces`, and `GET /api/v1/styles`; all are sorted by `sortOrder`, then `name`.
 
 ## Frontend
 
 The mobile-first React storefront lives in `apps/web`. It includes home discovery by room and style, catalog filters, product detail, cart, demo checkout, lighting calculator, and an API-backed consultation chat.
 
-```powershell
-pnpm dev:api
-pnpm dev:web
-```
-
-Vite runs at `http://localhost:5173` and proxies `/api` to the API at `http://localhost:4000`. Demo catalog data is loaded from the database; run `pnpm db:seed` to populate the sample catalog.
+Vite runs at `http://localhost:5173` and proxies `/api` to the API at `http://localhost:4000`. The startup command seeds the demo catalog and admin account.
 
 Đồ án thương mại điện tử đồ gia dụng và trang trí. Toàn bộ đơn và thanh toán hiện ở chế độ demo; không nhận tiền thật.
 
@@ -38,14 +45,11 @@ Vite runs at `http://localhost:5173` and proxies `/api` to the API at `http://lo
 Yêu cầu Node 22+, pnpm 12+ và Docker.
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up -d db mailpit
-pnpm install
-pnpm db:generate
-pnpm db:migrate
-pnpm test
-pnpm dev:api
+pnpm install # once after cloning
+pnpm dev     # each time you start the app
 ```
+
+If `.env` is missing, create it once with `Copy-Item .env.example .env` before starting.
 
 API mặc định chạy tại `http://localhost:4000`; Mailpit tại `http://localhost:8025`.
 

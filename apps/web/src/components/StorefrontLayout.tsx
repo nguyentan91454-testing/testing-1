@@ -24,7 +24,7 @@ export function StorefrontLayout() {
       params.delete("auth");
       navigate({ pathname: location.pathname, search: params.toString() ? `?${params}` : "" }, { replace: true });
     }
-  }, [location.pathname, location.search, navigate, queryClient]);
+  }, [location.pathname, location.search, location.hash, navigate, queryClient]);
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,7 +48,7 @@ export function StorefrontLayout() {
           </form>
           <div className="header-actions">
             <Link className="header-text-link" to="/products">Khám phá</Link>
-            {customer.data ? <button className="customer-account-link" onClick={() => logout.mutate()} title="Đăng xuất"><img src={customer.data.avatarUrl ?? ""} alt="" onError={e=>{e.currentTarget.style.display="none";}}/><UserRound size={16}/><span>{customer.data.name||"Tài khoản"}</span></button> : <a className="customer-account-link" href="/api/v1/auth/google" aria-label="Đăng nhập Google"><UserRound size={17}/><span>Đăng nhập</span></a>}
+            {customer.data ? <button className="customer-account-link" onClick={() => logout.mutate()} title="Đăng xuất"><img src={customer.data.avatarUrl ?? ""} alt="" onError={e=>{e.currentTarget.style.display="none";}}/><UserRound size={16}/><span>{customer.data.name||"Tài khoản"}</span></button> : <Link className="customer-account-link" to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} aria-label="Đăng nhập"><UserRound size={17}/><span>Đăng nhập</span></Link>}
             <Link className="bag-link" to="/cart" aria-label={`Giỏ hàng, ${cartCount} sản phẩm`}><ShoppingBag size={21} /><span>Giỏ hàng</span><b>{cartQuery.isLoading ? "–" : cartCount}</b></Link>
           </div>
         </div>
