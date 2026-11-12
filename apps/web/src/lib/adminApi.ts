@@ -9,7 +9,8 @@ export async function adminRequest<T = any>(path: string, method = "GET", body?:
     headers: { "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  const result = await response.json().catch(() => null) as { data?: T; message?: string } | null;
+  const result = await response.json().catch(() => null) as { data?: T; meta?: unknown; message?: string } | null;
   if (!response.ok) throw new AdminApiError(result?.message ?? "Không thể hoàn tất thao tác.", response.status);
-  return (result?.data ?? result) as T;
+  // Paginated API responses are consumed as { data, meta }; keep their envelope intact.
+  return (result?.meta ? result : result?.data ?? result) as T;
 }

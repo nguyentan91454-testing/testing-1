@@ -11,7 +11,8 @@ import { prisma } from "../../lib/prisma.js";
 const loginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(200) });
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const cookieName = "admin_session";
-const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api/v1/admin", maxAge: 15 * 60 * 1000 };
+const sessionLifetimeMs = 24 * 60 * 60 * 1000;
+const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api/v1/admin", maxAge: sessionLifetimeMs };
 
 export const adminAuthRouter = Router();
 const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false });
@@ -23,14 +24,14 @@ adminAuthRouter.post("/login", loginLimiter, async (request, response, next) => 
     const valid = admin?.isActive === true && await argon2.verify(admin.passwordHash, credentials.password).catch(() => false);
     if (!valid || !admin) throw new HttpError(401, "Email hoặc mật khẩu không đúng", "INVALID_CREDENTIALS");
 
-    const expiresAt = new Date(Date.now() + 15 * 60_000);
+    const expiresAt = new Date(Date.now() + sessionLifetimeMs);
     const session = await prisma.adminSession.create({ data: { adminId: admin.id, expiresAt } });
     const token = await new SignJWT({ role: "admin" })
       .setProtectedHeader({ alg: "HS256" })
       .setSubject(admin.id)
       .setJti(session.id)
       .setIssuedAt()
-      .setExpirationTime("15m")
+      .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
       .sign(accessSecret);
     response.cookie(cookieName, token, cookieOptions);
     response.json({ success: true, data: { id: admin.id, email: admin.email, role: admin.role }, message: "Đăng nhập thành công" });
