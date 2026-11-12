@@ -1,20 +1,22 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Compass, Lightbulb, Menu, PackageSearch, Search, ShoppingBag, UserRound, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Compass, Lightbulb, LogOut, Menu, PackageSearch, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { api } from "../lib/api";
 import { ChatWidget } from "./chat/ChatWidget";
 
 export function StorefrontLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const cartQuery = useQuery({ queryKey: ["cart"], queryFn: api.cart });
   const customer = useQuery({ queryKey: ["customer"], queryFn: api.customer, retry: false });
   const categories = useQuery({ queryKey: ["categories"], queryFn: api.categories });
-  const logout = useMutation({ mutationFn: api.customerLogout, onSuccess: () => { queryClient.setQueryData(["customer"], null); queryClient.invalidateQueries({ queryKey: ["cart"] }); } });
+  const logout = useMutation({ mutationFn: api.customerLogout, onSuccess: () => { setAccountMenuOpen(false); queryClient.setQueryData(["customer"], null); queryClient.invalidateQueries({ queryKey: ["cart"] }); } });
   const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
   useEffect(() => {
@@ -25,6 +27,24 @@ export function StorefrontLayout() {
       navigate({ pathname: location.pathname, search: params.toString() ? `?${params}` : "" }, { replace: true });
     }
   }, [location.pathname, location.search, location.hash, navigate, queryClient]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setAccountMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => setAccountMenuOpen(false), [location.pathname]);
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,7 +68,7 @@ export function StorefrontLayout() {
           </form>
           <div className="header-actions">
             <Link className="header-text-link" to="/products">Khám phá</Link>
-            {customer.data ? <button className="customer-account-link" onClick={() => logout.mutate()} title="Đăng xuất"><img src={customer.data.avatarUrl ?? ""} alt="" onError={e=>{e.currentTarget.style.display="none";}}/><UserRound size={16}/><span>{customer.data.name||"Tài khoản"}</span></button> : <Link className="customer-account-link" to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} aria-label="Đăng nhập"><UserRound size={17}/><span>Đăng nhập</span></Link>}
+            {customer.data ? <div className="customer-account-menu-wrap" ref={accountMenuRef}><button className="customer-account-link" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)} title="Mở menu tài khoản">{customer.data.avatarUrl ? <img src={customer.data.avatarUrl} alt="" onError={e=>{e.currentTarget.style.display="none";}}/> : <UserRound size={16}/>}<span>{customer.data.name||"Tài khoản"}</span><ChevronDown size={13}/></button>{accountMenuOpen&&<div className="customer-account-menu" role="menu"><Link role="menuitem" to="/account" onClick={()=>setAccountMenuOpen(false)}><UserRound size={16}/><span>Thông tin cá nhân</span></Link><button role="menuitem" type="button" onClick={()=>logout.mutate()} disabled={logout.isPending}><LogOut size={16}/><span>{logout.isPending?"Đang đăng xuất…":"Đăng xuất"}</span></button></div>}</div> : <Link className="customer-account-link" to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} aria-label="Đăng nhập"><UserRound size={17}/><span>Đăng nhập</span></Link>}
             <Link className="bag-link" to="/cart" aria-label={`Giỏ hàng, ${cartCount} sản phẩm`}><ShoppingBag size={21} /><span>Giỏ hàng</span><b>{cartQuery.isLoading ? "–" : cartCount}</b></Link>
           </div>
         </div>
