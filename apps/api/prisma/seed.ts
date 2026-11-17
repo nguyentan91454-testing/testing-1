@@ -3,6 +3,7 @@ import argon2 from "argon2";
 import { createHash } from "node:crypto";
 import dotenv from "dotenv";
 import { resolve } from "node:path";
+import { ensureDemoProductImage } from "./demo-images.js";
 
 dotenv.config({ path: resolve(process.cwd(), "../../.env") });
 
@@ -132,6 +133,11 @@ async function main() {
     await prisma.productStyle.upsert({ where: { productId_styleId: { productId: product.id, styleId: style.id } }, update: {}, create: { productId: product.id, styleId: style.id } });
   }
 
+  for (const item of products) {
+    const product = await prisma.product.findUniqueOrThrow({ where: { slug: item.slug }, select: { id: true, name: true } });
+    await ensureDemoProductImage(prisma, product, item.space);
+  }
+
   const departments = [
     ["home-appliances", "Home Appliances", 1],
     ["home-decor", "Home Decor", 2],
@@ -237,6 +243,7 @@ async function main() {
     });
     await prisma.productCategory.upsert({ where: { productId_categoryId: { productId: product.id, categoryId: category.id } }, update: {}, create: { productId: product.id, categoryId: category.id } });
     const attributes: Record<string, unknown> = { ...item.attrs, color_palette: item.color, companion_tags: [...item.tags], room_type: item.space };
+    await ensureDemoProductImage(prisma, product, item.space);
     for (const [key, value] of Object.entries(attributes)) {
       const definition = await prisma.attributeDefinition.findUniqueOrThrow({ where: { key } });
       await prisma.productAttribute.upsert({

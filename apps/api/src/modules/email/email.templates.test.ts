@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderOrderEmail, type OrderEmailType } from "./email.templates.js";
+import { renderOrderEmail, renderVerificationEmail, type OrderEmailType } from "./email.templates.js";
 
 const sampleOrder = {
   code: "DEMO-123",
@@ -14,6 +14,15 @@ const sampleOrder = {
 };
 
 describe("order email templates", () => {
+  it("renders a Vietnamese verification email with a 24-hour expiry and escaped data", () => {
+    const rendered = renderVerificationEmail({ name: "<script>test</script>", verificationUrl: "https://api.example.test/api/v1/auth/verify-email?token=signed&test=1" });
+    expect(rendered.subject).toContain("Xác minh email");
+    expect(rendered.text).toContain("24 giờ");
+    expect(rendered.text).toContain("\nVui lòng");
+    expect(rendered.html).not.toContain("<script>");
+    expect(rendered.html).toContain("&lt;script&gt;");
+    expect(rendered.html).toContain("token=signed&amp;test=1");
+  });
   it.each<[OrderEmailType, string]>([
     ["ORDER_CONFIRMATION", "đã nhận đơn"],
     ["PAYMENT_RECEIVED", "Đã nhận thanh toán"],

@@ -19,6 +19,12 @@ export interface RenderedEmail {
   html: string;
 }
 
+export function renderVerificationEmail(input: { name: string; verificationUrl: string }): RenderedEmail {
+  const name = escapeHtml(input.name);
+  const url = escapeHtml(input.verificationUrl);
+  return layout("Xác minh email tài khoản Nhà Mình", `Chào ${input.name},\nVui lòng mở liên kết sau để xác minh email: ${input.verificationUrl}\nLiên kết có hiệu lực trong 24 giờ.`, `<p>Chào ${name}, vui lòng xác minh email để hoàn tất đăng ký tài khoản.</p><p><a href="${url}" style="display:inline-block;padding:12px 18px;background:#2f6549;color:#fff;text-decoration:none">Xác minh email</a></p><p>Liên kết có hiệu lực trong 24 giờ.</p>`);
+}
+
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} đ`;
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 

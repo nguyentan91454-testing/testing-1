@@ -49,6 +49,40 @@
 .account-profile dt { color: #78827a; font-size: 11px; }
 .account-profile dd { margin: 0; color: #202923; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
 .account-loading { display: flex; align-items: center; gap: 9px; min-height: 55vh; color: #59645d; font-size: 13px; }
+.profile-edit-page .account-heading { max-width: 680px; }
+.profile-edit-page .account-heading p { line-height: 1.7; }
+.profile-edit-form { max-width: 680px; padding: 28px; border: 1px solid var(--line); background: var(--white); }
+.profile-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.profile-identity > div:last-child { min-width: 0; }
+.profile-identity strong { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.profile-identity p { display: flex; align-items: center; gap: 6px; margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.profile-identity svg { flex-shrink: 0; }
+.profile-hint { margin: 22px 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.profile-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.profile-fields input { min-height: 44px; font-size: 13px; }
+.profile-fields input[readonly] { background: #f4f6f2; color: var(--muted); }
+.profile-fields input[aria-invalid="true"] { border-color: var(--coral); }
+.profile-fields input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.profile-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; margin-top: 24px; }
+.profile-edit-form > .customer-auth-alert, .profile-edit-form > .customer-auth-notice { margin: 20px 0 0; }
+.checkout-missing-info ul { margin: 7px 0; padding-left: 20px; }
+.checkout-save-profile { margin: 24px 0; padding: 18px; border: 1px solid var(--line); background: var(--soft-green); }
+.checkout-save-profile p { font-size: 12px; line-height: 1.7; }
+@media (max-width: 520px) {
+  .profile-edit-form { padding: 18px; }
+  .profile-actions { align-items: stretch; flex-direction: column; }
+  .profile-actions .button { justify-content: space-between; }
+  .profile-actions .text-link { align-self: center; }
+  .checkout-save-profile .button { width: 100%; white-space: normal; }
+}
+.account-security { width: min(100%, 680px); margin-top: 20px; padding: 22px; border: 1px solid #e1e6df; background: #fff; scroll-margin-top: 180px; }
+.account-security h2 { margin: 0 0 18px; font-family: var(--serif); font-size: 24px; font-weight: 500; }
+.account-provider { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding: 12px 0; }
+.account-provider + .account-provider { border-top: 1px solid #e1e6df; }
+.account-provider p { flex: 1 1 260px; margin: 0; overflow-wrap: anywhere; font-size: 13px; }
+.account-provider .button { flex-shrink: 0; font-size: 12px; }
+.account-security-hint { margin: 8px 0; color: #69736c; font-size: 12px; }
+.account-page > .customer-auth-notice, .account-page > .customer-auth-alert { width: min(100%, 680px); }
 @media (max-width: 520px) { .account-page { padding-top: 18px; }.account-heading { margin-top: 25px; }.account-heading h1 { font-size: 29px; }.account-profile { gap: 13px; padding: 16px; } }
 
 * { box-sizing: border-box; }
@@ -74,6 +108,9 @@
 .customer-auth-switch a { color: var(--green); font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
 .customer-auth-security { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 25px 0 0; color: #7e8981; font-size: 10px; }
 .customer-auth-alert { margin: 0 0 15px; padding: 11px 12px; border: 1px solid #e4bdb3; background: #fff7f4; color: #873d2e; font-size: 12px; line-height: 1.45; }
+.customer-auth-notice { margin: 0 0 15px; padding: 11px 12px; border: 1px solid #c4d7c7; background: #f0f6ef; color: #2f6549; font-size: 12px; line-height: 1.5; }
+.auth-resend { width: 100%; margin-top: 14px; font-size: 12px; }
+.auth-quick-google { margin-bottom: 16px; }
 @media (max-width: 520px) { .customer-auth-page { min-height: 100dvh; padding: 20px 14px; }.customer-auth-panel { padding: 30px 23px 24px; }.customer-auth-panel h1 { font-size: 30px; } }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }

@@ -19,11 +19,16 @@ const envSchema = z.object({
   ALLOW_MOCK_PAYMENTS: z.enum(["true", "false"]).default("false"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
-  GOOGLE_CLIENT_ID: z.string().default(""),
-  GOOGLE_CLIENT_SECRET: z.string().default(""),
-  GOOGLE_REDIRECT_URI: z.string().default(""),
+  FIREBASE_PROJECT_ID: z.string().regex(/^[a-z0-9-]{6,30}$/).or(z.literal("")).default(""),
   RESEND_API_KEY: z.string().default(""),
+  GMAIL_USER: z.union([z.literal(""), z.string().email()]).default(""),
+  GMAIL_APP_PASSWORD: z.string().default("").transform((value) => value.replace(/\s/g, "")),
+  MAILPIT_SMTP_HOST: z.string().min(1).default("127.0.0.1"),
+  MAILPIT_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
   EMAIL_FROM: z.string().default("Home & Decor <onboarding@resend.dev>"),
+}).refine((value) => Boolean(value.GMAIL_USER) === Boolean(value.GMAIL_APP_PASSWORD), {
+  message: "Cần cấu hình cả GMAIL_USER và GMAIL_APP_PASSWORD để gửi thư qua Gmail.",
+  path: ["GMAIL_USER"],
 });
 
 export const env = envSchema.parse(process.env);

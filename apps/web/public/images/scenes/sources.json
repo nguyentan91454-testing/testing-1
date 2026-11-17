@@ -1,0 +1,51 @@
+[
+  {
+    "file": "photo-1600210492486-724fe5c67fb0.jpg",
+    "description": "Living room",
+    "sourceUrl": "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  {
+    "file": "photo-1600607687939-ce8a6c25118c.jpg",
+    "description": "Dining room",
+    "sourceUrl": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  {
+    "file": "photo-1616486338812-3dadae4b4ace.jpg",
+    "description": "Bedroom",
+    "sourceUrl": "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  {
+    "file": "photo-1600210492493-0946911123ea.jpg",
+    "description": "Scandinavian interior",
+    "sourceUrl": "https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  {
+    "file": "photo-1600607687920-4e2a09cf159d.jpg",
+    "description": "Modern interior",
+    "sourceUrl": "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  {
+    "file": "photo-1616486029423-aaa4789e8c9a.jpg",
+    "description": "Home decor",
+    "sourceUrl": "https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  {
+    "file": "photo-1556911220-e15b29be8c8f.jpg",
+    "description": "Kitchen",
+    "sourceUrl": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1600&q=82&fm=jpg",
+    "source": "Unsplash",
+    "licenseUrl": "https://unsplash.com/license"
+  }
+]

@@ -1,5 +1,13 @@
 import type { Cart, CheckoutResult, LightingResult, Product, TaxonomyItem } from "../types";
 
+export interface Customer {
+  id: string; email: string; name: string; avatarUrl: string | null; emailVerifiedAt: string | null;
+  phone: string | null; province: string | null; ward: string | null; addressDetail: string | null;
+}
+export type ProfileUpdate = Partial<Pick<Customer, "name" | "phone" | "province" | "ward" | "addressDetail">>;
+export type FirebaseLoginResult = Customer & { isNewAccount: boolean };
+export interface RegistrationResult { verificationRequired: true; emailSent: boolean; email: string }
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
@@ -46,9 +54,16 @@ export const api = {
   chatFeedback: (messageId: string, feedback: 1 | -1) => request<{ messageId: string; feedback: number }>(`/chat/messages/${messageId}/feedback`, { method: "PATCH", body: JSON.stringify({ feedback }) }),
   applyCoupon: (code: string) => request<Cart>("/cart/coupon", { method: "POST", body: JSON.stringify({ code }) }),
   removeCoupon: () => request<Cart>("/cart/coupon", { method: "DELETE" }),
-  customer: () => request<{ id: string; email: string; name: string; avatarUrl: string | null }>("/auth/me"),
-  customerLogin: (input: { email: string; password: string }) => request<{ id: string; email: string; name: string; avatarUrl: string | null }>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
-  customerRegister: (input: { name: string; email: string; password: string }) => request<{ id: string; email: string; name: string; avatarUrl: string | null }>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
+  customer: () => request<Customer>("/auth/me"),
+  customerLogin: (input: { email: string; password: string }) => request<Customer>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
+  customerRegister: (input: { name: string; email: string; password: string }) => request<RegistrationResult>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
+  customerFirebase: (idToken: string) => request<FirebaseLoginResult>("/auth/firebase", { method: "POST", headers: { authorization: `Bearer ${idToken}` }, body: JSON.stringify({}) }),
+  updateProfile: (input: ProfileUpdate) => request<Customer>("/auth/profile", { method: "PATCH", body: JSON.stringify(input) }),
+  resendVerification: (email: string) => request<void>("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
+  authProviders: () => request<{ providers: Array<{ type: "credentials" | "google"; linked: boolean; email?: string }> }>("/auth/providers"),
+  unlinkGoogle: () => request<void>("/auth/providers/google", { method: "DELETE" }),
+  setPassword: (password: string) => request<void>("/auth/set-password", { method: "POST", body: JSON.stringify({ password }) }),
+  changePassword: (currentPassword: string, newPassword: string) => request<void>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   customerLogout: () => request<void>("/auth/logout", { method: "POST" }),
   trackOrder: (code: string, token: string) => request<any>(`/orders/track/${encodeURIComponent(code)}`, { headers: { "x-order-tracking-token": token } }),
   trackOrderByPhone: (orderCode: string, phone: string) => request<any>("/orders/track-verify", { method: "POST", body: JSON.stringify({ orderCode, phone }) }),

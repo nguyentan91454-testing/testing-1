@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { PgBoss } from "pg-boss";
 import { z } from "zod";
+import nodemailer from "nodemailer";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
+import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
-import { renderOrderEmail, type OrderEmailType } from "./email.templates.js";
+import { renderOrderEmail, renderVerificationEmail, type OrderEmailType } from "./email.templates.js";
 import { createOrderTrackingToken, matchesOrderTrackingToken } from "../orders/mock-payment.js";
 
 const queueName = "send-order-emails";
@@ -13,6 +15,42 @@ const emailTypeSchema = z.enum(["ORDER_CONFIRMATION", "PAYMENT_RECEIVED", "ORDER
 type EmailJobData = { logId?: string; sweep?: boolean };
 type EmailDb = Prisma.TransactionClient | PrismaClient;
 let boss: PgBoss | null = null;
+
+export async function sendVerificationEmail(input: { email: string; name: string; token: string }): Promise<void> {
+  const verificationUrl = `${env.API_BASE_URL.replace(/\/$/, "")}/api/v1/auth/verify-email?token=${encodeURIComponent(input.token)}`;
+  const rendered = renderVerificationEmail({ name: input.name, verificationUrl });
+  try {
+    if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) {
+      const transport = nodemailer.createTransport({
+        host: "smtp.gmail.com", port: 465, secure: true,
+        auth: { user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD },
+        connectionTimeout: 15_000, greetingTimeout: 10_000, socketTimeout: 15_000,
+      });
+      await transport.sendMail({ from: { name: "Konyappi Shop", address: env.GMAIL_USER }, to: input.email, ...rendered });
+      return;
+    }
+    if (!env.RESEND_API_KEY) {
+      if (env.NODE_ENV !== "development") throw new HttpError(503, "Dịch vụ email xác minh chưa được cấu hình. Vui lòng thử lại sau.", "VERIFICATION_EMAIL_UNAVAILABLE");
+      const transport = nodemailer.createTransport({
+        host: env.MAILPIT_SMTP_HOST, port: env.MAILPIT_SMTP_PORT, secure: false,
+        connectionTimeout: 5_000, greetingTimeout: 5_000, socketTimeout: 5_000,
+      });
+      await transport.sendMail({ from: env.EMAIL_FROM, to: input.email, ...rendered });
+      logger.info("Verification email delivered to Mailpit; open http://localhost:8025 (development only)");
+      return;
+    }
+    const result = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: env.EMAIL_FROM, to: [input.email], subject: rendered.subject, html: rendered.html, text: rendered.text }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!result.ok) throw new Error(`Resend request failed with HTTP ${result.status}`);
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(503, "Chưa thể gửi email xác minh. Vui lòng thử gửi lại sau.", "VERIFICATION_EMAIL_UNAVAILABLE");
+  }
+}
 
 export function hashEmailAddress(email: string): string {
   return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");

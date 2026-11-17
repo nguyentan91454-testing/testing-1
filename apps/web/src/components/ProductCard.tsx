@@ -12,6 +12,7 @@ export function ProductCard({ product, onAdd }: { product: Product; onAdd?: (var
     <article className="product-card">
       <Link className="product-image" to={`/products/${product.slug}`} aria-label={`Xem ${product.name}`}>
         {image ? <img src={image.url} alt={image.alt ?? product.name} loading="lazy" /> : <div className="image-missing"><span>Ảnh minh họa<br />đang được cập nhật</span></div>}
+        {image?.kind === "scene" && <span className="demo-image-label">KHÔNG GIAN MINH HỌA</span>}
         {discountPercent>0&&<span className="product-sale-tag">-{discountPercent}%</span>}
         <span className="product-kind">{product.categories?.[0]?.category.name ?? "ĐÈN TRANG TRÍ"}</span>
         <span className="product-open"><ArrowUpRight size={18} /></span>

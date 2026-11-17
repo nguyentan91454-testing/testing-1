@@ -18,6 +18,7 @@ export interface ProductImage {
   id: string;
   url: string;
   alt?: string | null;
+  kind?: string;
 }
 
 export interface ProductVariant {

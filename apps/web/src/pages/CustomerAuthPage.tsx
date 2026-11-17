@@ -2,7 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { ApiError, api, type Customer, type RegistrationResult } from "../lib/api";
+import { z } from "zod";
+import { firebaseConfigured, firebaseErrorMessage, signInWithFirebaseGoogle } from "../lib/firebase";
 
 export function CustomerAuthPage({ mode }: { mode: "login" | "register" }) {
   const isRegister = mode === "register";
@@ -10,46 +12,79 @@ export function CustomerAuthPage({ mode }: { mode: "login" | "register" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const params = new URLSearchParams(location.search);
+  const next = params.get("next");
+  const destination = next?.startsWith("/") && !next.startsWith("//") && !/[\\\u0000-\u0020\u007f]/.test(next) ? next : "/";
   const customer = useQuery({ queryKey: ["customer"], queryFn: api.customer, retry: false });
   const auth = useMutation({
-    mutationFn: () => isRegister ? api.customerRegister({ name, email, password }) : api.customerLogin({ email, password }),
+    mutationFn: async (): Promise<Customer | RegistrationResult> => isRegister ? api.customerRegister({ name, email, password }) : api.customerLogin({ email, password }),
     onSuccess: (user) => {
+      if ("verificationRequired" in user) {
+        setNotice(user.emailSent ? "Đăng ký thành công. Vui lòng kiểm tra email để xác minh tài khoản trước khi đăng nhập." : "Tài khoản đã được tạo nhưng chưa thể gửi email xác minh. Vui lòng yêu cầu gửi lại email sau.");
+        setPassword("");
+        return;
+      }
       queryClient.setQueryData(["customer"], user);
+      queryClient.removeQueries({ queryKey: ["auth-providers"] });
       queryClient.invalidateQueries({ queryKey: ["cart"] });
-      const destination = new URLSearchParams(location.search).get("next");
-      navigate(destination?.startsWith("/") ? destination : "/", { replace: true });
+      navigate(destination, { replace: true });
     },
     onError: (reason) => setError(reason instanceof Error ? reason.message : "Không thể đăng nhập. Vui lòng thử lại."),
   });
+  const resend = useMutation({
+    mutationFn: () => api.resendVerification(email),
+    onSuccess: () => { setError(""); setNotice("Nếu email tồn tại và cần xác minh, liên kết mới sẽ được gửi đến bạn. Vui lòng kiểm tra cả thư mục thư rác."); },
+    onError: (reason) => setError(reason instanceof Error ? reason.message : "Chưa thể gửi lại email xác minh."),
+  });
+  const firebaseLogin = useMutation({
+    mutationFn: async () => api.customerFirebase(await signInWithFirebaseGoogle()),
+    onSuccess: ({ isNewAccount, ...user }) => {
+      queryClient.setQueryData(["customer"], user);
+      queryClient.removeQueries({ queryKey: ["auth-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+      navigate(isNewAccount ? "/account/edit?welcome=true" : destination, { replace: true });
+    },
+    onError: (reason) => setError(reason instanceof ApiError ? reason.message : firebaseErrorMessage(reason)),
+  });
 
-  if (customer.data) return <Navigate to="/" replace />;
+  if (customer.data && !customer.isError) return <Navigate to={firebaseLogin.data?.isNewAccount ? "/account/edit?welcome=true" : destination} replace />;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setNotice("");
     auth.mutate();
   }
 
-  const cancelled = new URLSearchParams(location.search).get("auth_error") === "cancelled";
+  const errorCode = auth.error instanceof ApiError ? auth.error.code : undefined;
+  const showResend = Boolean(notice) || errorCode === "EMAIL_NOT_VERIFIED" || errorCode === "EMAIL_ALREADY_REGISTERED";
   return <main className="customer-auth-page"><section className="customer-auth-panel">
     <Link to="/" className="customer-auth-brand"><span className="wordmark-mark">K</span><span>Konyappi Shop<small>LIGHTING & LIVING</small></span></Link>
     <span className="eyebrow">TÀI KHOẢN KHÁCH HÀNG</span>
     <h1>{isRegister ? "Tạo tài khoản" : "Đăng nhập"}</h1>
     <p className="customer-auth-lead">{isRegister ? "Tạo tài khoản để lưu thông tin và theo dõi trải nghiệm mua sắm." : "Đăng nhập để tiếp tục trải nghiệm mua sắm của bạn."}</p>
-    {cancelled && <div className="customer-auth-alert" role="status">Bạn đã hủy đăng nhập Google.</div>}
+    {params.get("email_verified") === "success" && <div className="customer-auth-notice" role="status">Email đã được xác minh. Bạn có thể đăng nhập.</div>}
+    {notice && <div className="customer-auth-notice" role="status">{notice}</div>}
     {error && <div className="customer-auth-alert" role="alert">{error}</div>}
+    {errorCode === "CREDENTIALS_NOT_SET" && <button type="button" className="customer-google-button auth-quick-google" disabled={firebaseLogin.isPending || !firebaseConfigured()} onClick={() => { setError(""); firebaseLogin.mutate(); }}><GoogleMark/><span>Đăng nhập bằng Google</span></button>}
     <form className="customer-auth-form" onSubmit={submit}>
       {isRegister && <label>Họ và tên<input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={120} required /></label>}
       <label>Email<input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} required /></label>
       <label>Mật khẩu<input autoComplete={isRegister ? "new-password" : "current-password"} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} maxLength={200} required /><small>{isRegister ? "Tối thiểu 8 ký tự" : ""}</small></label>
       <button className="button button-dark full-button" disabled={auth.isPending}>{auth.isPending && <LoaderCircle className="spin" size={17}/>}<span>{isRegister ? "Đăng ký" : "Đăng nhập"}</span><ArrowRight size={17}/></button>
     </form>
+    {showResend && <button type="button" className="button button-outline auth-resend" disabled={resend.isPending} onClick={() => {
+      if (!z.string().trim().email().max(254).safeParse(email).success) { setError("Vui lòng nhập email hợp lệ để gửi lại liên kết xác minh."); return; }
+      resend.mutate();
+    }}>{resend.isPending ? "Đang gửi…" : "Gửi lại email xác minh"}</button>}
     <div className="customer-auth-divider"><span>hoặc tiếp tục với</span></div>
-    <a className="customer-google-button" href="/api/v1/auth/google"><GoogleMark/><span>Google</span></a>
-    <p className="customer-auth-switch">{isRegister ? "Đã có tài khoản?" : "Chưa có tài khoản?"} <Link to={isRegister ? "/login" : "/register"}>{isRegister ? "Đăng nhập" : "Đăng ký"}</Link></p>
+    {!firebaseConfigured() && <p className="customer-auth-security" role="status">Đăng nhập Google chưa sẵn sàng. Hãy cấu hình Firebase Authentication trong file môi trường.</p>}
+    <button type="button" className="customer-google-button" disabled={firebaseLogin.isPending} onClick={() => { setError(""); firebaseLogin.mutate(); }}><GoogleMark/><span>{firebaseLogin.isPending ? "Đang mở Google…" : "Google"}</span></button>
+    <p className="customer-auth-switch">{isRegister ? "Đã có tài khoản?" : "Chưa có tài khoản?"} <Link to={`${isRegister ? "/login" : "/register"}?next=${encodeURIComponent(destination)}`}>{isRegister ? "Đăng nhập" : "Đăng ký"}</Link></p>
     <p className="customer-auth-security"><ShieldCheck size={15}/> Phiên đăng nhập được bảo vệ bằng cookie bảo mật.</p>
   </section></main>;
 }

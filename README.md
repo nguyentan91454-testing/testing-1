@@ -28,6 +28,7 @@ Vite runs at `http://localhost:5173` and proxies `/api` to the API at `http://lo
 - PostgreSQL + Prisma với các mô hình catalog, biến thể, giỏ, đơn, thanh toán, vận chuyển, coupon, chatbot và audit.
 - Module thuần tính giá VND và quy tắc chuyển trạng thái đơn, có unit test.
 - Catalog: `GET /api/v1/products` (lọc, sắp xếp, phân trang, tìm không dấu), `GET /api/v1/products/:slug`.
+- Ảnh không gian được lưu local trong `apps/web/public/images/scenes`. Seed thêm ảnh không gian minh họa cho sản phẩm mẫu chưa có ảnh, giữ nguyên ảnh đã có; ảnh Google tải qua API có cache và biểu tượng thay thế khi lỗi. Xem [cách quản lý ảnh](docs/images.md).
 - Giỏ khách vãng lai: `GET/POST/PATCH/DELETE /api/v1/cart` với session cookie HttpOnly; giá luôn lấy từ DB.
 - Mã giảm giá áp dụng/xóa tại `POST/DELETE /api/v1/cart/coupon`; cần đăng nhập Google để áp dụng và checkout kiểm tra lại điều kiện, lượt dùng, danh tính, giá giảm trong transaction.
 - Checkout demo: `POST /api/v1/orders`, cần header `Idempotency-Key`; kiểm tra tồn kho và tạo snapshot đơn trong transaction, trả token tra cứu có chữ ký hạn 30 ngày.
@@ -57,3 +58,46 @@ Seed tạo admin từ `ADMIN_BOOTSTRAP_EMAIL` và `ADMIN_BOOTSTRAP_PASSWORD` tro
 
 Chatbot dùng Gemini khi `AI_PROVIDER=gemini` và `GEMINI_API_KEY` được cấu hình; mặc định `AI_PROVIDER=mock` chỉ lọc sản phẩm từ database. Ngân sách và chế độ demo chỉnh trong Admin. Các phần backend còn lại theo PRD gồm recommendations/ML, vận chuyển và các tích hợp giao diện.
 
+## Xác thực khách hàng
+
+- Đăng ký email/mật khẩu yêu cầu xác minh email trước khi đăng nhập; không tạo session khi đăng ký. Liên kết xác minh có hiệu lực 24 giờ, được xử lý tại `GET /api/v1/auth/verify-email?token=...`.
+- Gửi lại liên kết qua `POST /api/v1/auth/resend-verification` với `{ email }`, giới hạn 3 lần/15 phút. Gửi thư xác minh qua Gmail SMTP khi đã cấu hình `GMAIL_USER` và `GMAIL_APP_PASSWORD`; nếu không, dùng `RESEND_API_KEY` và `EMAIL_FROM`. Khi cả hai chưa được cấu hình trong development, thư xác minh được gửi vào Mailpit tại `http://localhost:8025`. Production không dùng Mailpit và không log token xác minh.
+- Trang `/account` hiển thị phương thức đăng nhập, cho phép đặt mật khẩu cho tài khoản chỉ dùng Google, đổi mật khẩu và gỡ liên kết Google khi đã có mật khẩu. Đổi mật khẩu sẽ thu hồi các session khác, giữ session hiện tại.
+- Trang `/account/edit` cập nhật tên, SĐT liên hệ và một địa chỉ mặc định. Tài khoản Google mới được chuyển tới màn hình này và có thể bỏ qua. Checkout tự điền hồ sơ, cho phép đổi người nhận và chỉ lưu SĐT/địa chỉ mới khi khách bấm nút lưu sau khi tạo đơn. Xem [chi tiết luồng hồ sơ](docs/customer-profile-flow.md).
+- Đăng nhập Google qua Firebase tự xác minh email Google đã được Firebase chứng thực. Nếu trùng tài khoản email/mật khẩu chưa xác minh, hệ thống liên kết Firebase và xóa mật khẩu chưa được xác minh; khách có thể đặt mật khẩu mới sau khi đăng nhập. Liên kết chủ động từ `/account` yêu cầu email Google trùng email tài khoản.
+- Migration `20261114090000_email_verification` xác minh sẵn tài khoản Google-only cũ; các tài khoản có mật khẩu cũ cần xác minh email và các session chưa xác minh sẽ bị thu hồi. `pnpm dev` tự áp dụng migration; cũng có thể chạy `pnpm --filter @commerce/api db:deploy`.
+
+### Gửi xác minh bằng Gmail
+
+1. Bật **Xác minh 2 bước** tại <https://myaccount.google.com/security> cho Gmail gửi thư.
+2. Mở <https://myaccount.google.com/apppasswords>, đặt tên ứng dụng `Konyappi Shop`, tạo mật khẩu ứng dụng 16 ký tự. Nếu không thấy tùy chọn này, kiểm tra đã bật Xác minh 2 bước; một số tài khoản cơ quan/trường học hoặc có chính sách bảo vệ không hỗ trợ mật khẩu ứng dụng.
+3. Điền trực tiếp trong file `.env` (không gửi mật khẩu qua chat và không dùng mật khẩu đăng nhập Google thông thường):
+
+   ```dotenv
+   GMAIL_USER=dia-chi-gui-thu@gmail.com
+   GMAIL_APP_PASSWORD=mat-khau-ung-dung-16-ky-tu
+   ```
+
+4. Khởi động lại API (`pnpm dev:api`, hoặc dừng và chạy lại `pnpm dev:all`), rồi nhấn **Gửi lại email xác minh** trên trang đăng nhập. Kiểm tra cả thư mục thư rác. Gmail gửi từ chính địa chỉ `GMAIL_USER`, không cần cấu hình Google OAuth Client cho việc gửi email.
+
+Khi chạy trên máy khác hoặc triển khai public, đặt `API_BASE_URL` và `APP_BASE_URL` thành URL mà người nhận có thể truy cập; URL `localhost` chỉ mở được trên máy đang chạy project. Cấu hình Gmail này áp dụng cho thư xác minh tài khoản; email đơn hàng vẫn dùng Resend.
+
+### Đăng nhập Google qua Firebase
+
+Ứng dụng dùng Firebase Authentication cho nút đăng nhập/liên kết Google. Gmail SMTP vẫn chỉ dùng để gửi email xác minh tài khoản.
+
+1. Tạo Firebase project tại <https://console.firebase.google.com/> rồi mở **Authentication → Sign-in method** và bật **Google**.
+2. Mở **Project settings → General → Your apps**. Tạo ứng dụng Web nếu project chưa có, rồi chép `apiKey`, `authDomain`, `projectId` và `appId` vào `.env`:
+
+   ```dotenv
+   FIREBASE_PROJECT_ID=your-firebase-project-id
+   VITE_FIREBASE_API_KEY=your-web-api-key
+   VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=your-firebase-project-id
+   VITE_FIREBASE_APP_ID=your-web-app-id
+   ```
+
+3. Trong **Authentication → Settings → Authorized domains**, thêm `localhost` để chạy local và domain website khi triển khai.
+4. Khởi động lại API và web. Backend xác minh Firebase ID token bằng khóa công khai của Firebase; không cần đặt Google OAuth Client Secret trong ứng dụng.
+
+Nếu các biến trên để trống, nút Google sẽ bị vô hiệu hóa hoặc API trả về `FIREBASE_NOT_CONFIGURED`. Đăng nhập Google trên môi trường public cần HTTPS và domain đó phải có trong Authorized domains.

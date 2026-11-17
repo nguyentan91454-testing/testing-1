@@ -18,7 +18,7 @@ const checkoutSchema = z.object({
   email: z.string().email().max(254),
   province: z.string().trim().min(2).max(100),
   ward: z.string().trim().min(2).max(100),
-  addressDetail: z.string().trim().min(5).max(300),
+  addressDetail: z.string().trim().min(5).max(500),
   paymentMethod: z.enum(["COD", "VIETQR"]),
   note: z.string().trim().max(1000).optional(),
 });

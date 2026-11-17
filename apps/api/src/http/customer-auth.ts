@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { jwtVerify } from "jose";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
-import { hashSessionToken } from "../modules/auth/google-oauth.js";
+import { hashSessionToken } from "../modules/auth/session-token.js";
 import { HttpError } from "./errors.js";
 
 declare global {
@@ -34,7 +34,7 @@ async function resolveCustomer(token: string): Promise<{ id: string; sessionId: 
     throw new HttpError(401, "Phiên đăng nhập không hợp lệ", "UNAUTHENTICATED");
   }
   const session = await prisma.customerSession.findFirst({
-    where: { id: payload.jti, userId: payload.sub, tokenHash: hashSessionToken(token), revokedAt: null, expiresAt: { gt: new Date() }, user: { status: "ACTIVE" } },
+    where: { id: payload.jti, userId: payload.sub, tokenHash: hashSessionToken(token), revokedAt: null, expiresAt: { gt: new Date() }, user: { status: "ACTIVE", emailVerifiedAt: { not: null } } },
     select: { id: true, userId: true },
   });
   if (!session) throw new HttpError(401, "Phiên đăng nhập đã hết hạn", "UNAUTHENTICATED");

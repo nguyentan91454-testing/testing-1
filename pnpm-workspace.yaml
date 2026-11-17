@@ -1,8 +1,10 @@
 packages:
   - apps/*
 allowBuilds:
+  '@firebase/util': false
   '@prisma/client': false
   '@prisma/engines': false
   argon2: true
   esbuild: true
   prisma: true
+  protobufjs: false
