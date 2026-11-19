@@ -33,6 +33,15 @@ async function requestWithMeta<T>(path: string): Promise<{ data: T; meta?: { pag
   return { data: body?.data ?? ([] as T), meta: body?.meta };
 }
 
+async function requestMultipart<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("avatar", file);
+  const response = await fetch('/api/v1' + path, { method: "POST", credentials: "include", body: form });
+  const body = await response.json().catch(() => null) as { data?: T; message?: string; code?: string } | null;
+  if (!response.ok) throw new ApiError(body?.message ?? "Không thể tải ảnh lên.", response.status, body?.code);
+  return (body?.data ?? body) as T;
+}
+
 export const api = {
   products: (search: URLSearchParams) => request<Product[]>(`/products?${search.toString()}`),
   catalog: (search: URLSearchParams) => requestWithMeta<Product[]>(`/products?${search.toString()}`),
@@ -59,6 +68,8 @@ export const api = {
   customerRegister: (input: { name: string; email: string; password: string }) => request<RegistrationResult>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
   customerFirebase: (idToken: string) => request<FirebaseLoginResult>("/auth/firebase", { method: "POST", headers: { authorization: `Bearer ${idToken}` }, body: JSON.stringify({}) }),
   updateProfile: (input: ProfileUpdate) => request<Customer>("/auth/profile", { method: "PATCH", body: JSON.stringify(input) }),
+  uploadAvatar: (file: File) => requestMultipart<Customer>("/auth/profile/avatar", file),
+  removeAvatar: () => request<Customer>("/auth/profile/avatar", { method: "DELETE" }),
   resendVerification: (email: string) => request<void>("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
   authProviders: () => request<{ providers: Array<{ type: "credentials" | "google"; linked: boolean; email?: string }> }>("/auth/providers"),
   unlinkGoogle: () => request<void>("/auth/providers/google", { method: "DELETE" }),

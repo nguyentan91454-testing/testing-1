@@ -1,8 +1,8 @@
 import { CustomerAvatar } from "../components/CustomerAvatar";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, LoaderCircle, LockKeyhole } from "lucide-react";
+import { ArrowRight, Camera, LoaderCircle, LockKeyhole, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, api, type Customer } from "../lib/api";
@@ -26,6 +26,8 @@ function ProfileForm({ customer, welcome }: { customer: Customer; welcome: boole
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
   const form = useForm<ProfileFormValues>({ resolver: zodResolver(profileFormSchema), defaultValues: profileFormValues(customer) });
   const save = useMutation({
     mutationFn: (values: ProfileFormValues) => api.updateProfile({
@@ -39,12 +41,30 @@ function ProfileForm({ customer, welcome }: { customer: Customer; welcome: boole
       if (welcome) navigate("/", { replace: true });
     },
   });
+  const upload = useMutation({
+    mutationFn: (file: File) => api.uploadAvatar(file),
+    onSuccess: (user) => { queryClient.setQueryData(["customer"], user); setAvatarError(""); setSaved(true); },
+  });
+  const remove = useMutation({
+    mutationFn: api.removeAvatar,
+    onSuccess: (user) => { queryClient.setQueryData(["customer"], user); setAvatarError(""); setSaved(true); },
+  });
+  function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { upload.reset(); setAvatarError("Chỉ nhận ảnh JPEG, PNG hoặc WebP."); setSaved(false); return; }
+    if (file.size > 5 * 1024 * 1024) { upload.reset(); setAvatarError("Ảnh đại diện không được quá 5 MB."); setSaved(false); return; }
+    setAvatarError("");
+    setSaved(false);
+    upload.mutate(file);
+  }
   const errors = form.formState.errors;
   return <div className="wrap account-page profile-edit-page">
     <div className="breadcrumbs"><Link to="/">Trang chủ</Link><span>/</span><Link to="/account">Tài khoản</Link><span>/</span><span>Chỉnh sửa hồ sơ</span></div>
     <header className="account-heading"><span className="eyebrow">{welcome ? "CHÀO MỪNG ĐẾN KONYAPPI SHOP" : "HỒ SƠ CỦA BẠN"}</span><h1>{welcome ? "Rất vui được gặp bạn." : "Chỉnh sửa hồ sơ"}</h1><p>{welcome ? "Tài khoản đã sẵn sàng. Bạn có thể bổ sung thông tin ngay hoặc bỏ qua để mua sắm." : "Cập nhật thông tin để lần đặt hàng sau thuận tiện hơn."}</p></header>
     <form className="profile-edit-form" onSubmit={form.handleSubmit((values) => { setSaved(false); save.mutate(values); })} noValidate>
-      <div className="profile-identity"><div className="account-avatar"><CustomerAvatar customerId={customer.id} avatarUrl={customer.avatarUrl} size={26}/></div><div><strong>{customer.name}</strong><p><LockKeyhole size={13}/>Email được quản lý bởi tài khoản đăng nhập.</p></div></div>
+      <div className="profile-identity"><div className="account-avatar"><CustomerAvatar customerId={customer.id} avatarUrl={customer.avatarUrl} size={26}/></div><div><strong>{customer.name}</strong><p><LockKeyhole size={13}/>Email được quản lý bởi tài khoản đăng nhập.</p><div className="avatar-actions"><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={chooseAvatar}/><button type="button" className="button button-outline" disabled={upload.isPending || remove.isPending} onClick={() => fileInput.current?.click()}><Camera size={14}/>{upload.isPending ? "Đang tải ảnh…" : "Đổi ảnh đại diện"}</button>{customer.avatarUrl && <button type="button" className="bare-button avatar-remove" disabled={upload.isPending || remove.isPending} onClick={() => remove.mutate()}><Trash2 size={14}/>Xóa ảnh</button>}</div>{avatarError && <small className="field-error" role="alert">{avatarError}</small>}{upload.isError && <small className="field-error" role="alert">{upload.error.message}</small>}{remove.isError && <small className="field-error" role="alert">{remove.error.message}</small>}</div></div>
       <p className="profile-hint">Chỉ họ tên là bắt buộc. Số điện thoại và địa chỉ có thể bổ sung khi đặt hàng; bạn có thể dùng thông tin của người nhận khác.</p>
       <fieldset disabled={save.isPending} className="profile-fields">
         <div className="form-grid">

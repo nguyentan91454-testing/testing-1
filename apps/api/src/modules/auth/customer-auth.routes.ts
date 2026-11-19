@@ -13,6 +13,8 @@ import { readFirebaseBearer, verifyFirebaseIdToken } from "./firebase-auth.js";
 import { sendVerificationEmail } from "../email/email.service.js";
 import { customerProfileSelect, publicCustomer, updateProfileSchema } from "./customer-profile.js";
 import { loadCustomerAvatar } from "./customer-avatar.js";
+import multer from "multer";
+import { avatarMimeExtension, avatarUploadLimit, readStoredAvatar, removeStoredAvatar, saveAvatar } from "./customer-avatar-storage.js";
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
@@ -109,7 +111,7 @@ customerAuthRouter.post("/firebase", firebaseLimiter, optionalCustomer, async (r
         if (currentUser.email !== identity.email) throw new HttpError(409, "Vui lòng chọn tài khoản Google có cùng email với tài khoản hiện tại.", "FIREBASE_EMAIL_MISMATCH");
         if (user && user.id !== currentUser.id) throw new HttpError(409, "Tài khoản Google này đã được liên kết với tài khoản khác.", "FIREBASE_ACCOUNT_CONFLICT");
         if (currentUser.firebaseUid && currentUser.firebaseUid !== identity.firebaseUid) throw new HttpError(409, "Tài khoản này đã liên kết với một tài khoản Google khác.", "FIREBASE_ACCOUNT_CONFLICT");
-        user = await tx.user.update({ where: { id: currentUser.id }, data: { firebaseUid: identity.firebaseUid, avatarUrl: identity.avatarUrl, emailVerifiedAt: currentUser.emailVerifiedAt ?? new Date() } });
+        user = await tx.user.update({ where: { id: currentUser.id }, data: { firebaseUid: identity.firebaseUid, ...(currentUser.avatarStorageKey ? {} : { avatarUrl: identity.avatarUrl }), emailVerifiedAt: currentUser.emailVerifiedAt ?? new Date() } });
       } else if (!user) {
         user = await tx.user.findUnique({ where: { email: identity.email } });
         if (user?.firebaseUid && user.firebaseUid !== identity.firebaseUid) throw new HttpError(409, "Email này đã liên kết với tài khoản Google khác.", "FIREBASE_ACCOUNT_CONFLICT");
@@ -119,7 +121,7 @@ customerAuthRouter.post("/firebase", firebaseLimiter, optionalCustomer, async (r
           }
           user = await tx.user.update({ where: { id: user.id }, data: {
             firebaseUid: identity.firebaseUid,
-            avatarUrl: identity.avatarUrl,
+            ...(user.avatarStorageKey ? {} : { avatarUrl: identity.avatarUrl }),
             emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
             ...(user.passwordHash && !user.emailVerifiedAt ? { passwordHash: null } : {}),
           } });
@@ -128,7 +130,7 @@ customerAuthRouter.post("/firebase", firebaseLimiter, optionalCustomer, async (r
           isNewAccount = true;
         }
       } else {
-        user = await tx.user.update({ where: { id: user.id }, data: { avatarUrl: identity.avatarUrl, emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
+        user = await tx.user.update({ where: { id: user.id }, data: { ...(user.avatarStorageKey ? {} : { avatarUrl: identity.avatarUrl }), emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
       }
       if (user.status !== "ACTIVE") throw new HttpError(403, "Tài khoản này đã bị vô hiệu hóa.", "CUSTOMER_ACCOUNT_DISABLED");
       return { ...publicCustomer(user), isNewAccount };
@@ -147,10 +149,51 @@ customerAuthRouter.get("/me", requireCustomer, async (request, response, next) =
 
 customerAuthRouter.get("/avatar", requireCustomer, async (request, response, next) => {
   try {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarUrl: true } });
-    const avatar = await loadCustomerAvatar(user.avatarUrl);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarUrl: true, avatarStorageKey: true } });
+    const avatar = user.avatarStorageKey ? await readStoredAvatar(user.avatarStorageKey) : await loadCustomerAvatar(user.avatarUrl);
     response.setHeader("Cache-Control", "private, no-store");
     response.type(avatar.contentType).send(avatar.bytes);
+  } catch (error) { next(error); }
+});
+
+const receiveAvatar = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: avatarUploadLimit(), files: 1 },
+  fileFilter: (_request, file, callback) => {
+    if (!avatarMimeExtension(file.mimetype)) { callback(new Error("Unsupported avatar type")); return; }
+    callback(null, true);
+  },
+}).single("avatar");
+
+customerAuthRouter.post("/profile/avatar", requireCustomer, (request, response, next) => {
+  receiveAvatar(request, response, (error) => {
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") { next(new HttpError(400, "Ảnh đại diện không được quá 5 MB.", "AVATAR_TOO_LARGE")); return; }
+    if (error) { next(new HttpError(400, "Chỉ nhận ảnh JPEG, PNG hoặc WebP.", "AVATAR_INVALID")); return; }
+    next();
+  });
+}, async (request, response, next) => {
+  try {
+    const file = request.file;
+    if (!file) throw new HttpError(400, "Hãy chọn một ảnh đại diện.", "AVATAR_REQUIRED");
+    const old = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarStorageKey: true } });
+    const key = await saveAvatar(file.buffer, file.mimetype);
+    try {
+      const user = await prisma.user.update({ where: { id: request.customer!.id }, data: { avatarUrl: "/api/v1/auth/avatar", avatarStorageKey: key }, select: customerProfileSelect });
+      await removeStoredAvatar(old.avatarStorageKey);
+      response.json({ success: true, data: publicCustomer(user) });
+    } catch (error) {
+      await removeStoredAvatar(key);
+      throw error;
+    }
+  } catch (error) { next(error); }
+});
+
+customerAuthRouter.delete("/profile/avatar", requireCustomer, async (request, response, next) => {
+  try {
+    const old = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarStorageKey: true, avatarUrl: true } });
+    const user = await prisma.user.update({ where: { id: request.customer!.id }, data: { avatarUrl: null, avatarStorageKey: null }, select: customerProfileSelect });
+    await removeStoredAvatar(old.avatarStorageKey);
+    response.json({ success: true, data: publicCustomer(user) });
   } catch (error) { next(error); }
 });
 

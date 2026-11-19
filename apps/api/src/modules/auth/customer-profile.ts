@@ -3,10 +3,12 @@ import { z } from "zod";
 
 export const customerProfileSelect = {
   id: true, email: true, name: true, avatarUrl: true, emailVerifiedAt: true,
+  avatarStorageKey: true,
   phone: true, province: true, ward: true, addressDetail: true,
 } satisfies Prisma.UserSelect;
 
-type PublicCustomer = Prisma.UserGetPayload<{ select: typeof customerProfileSelect }>;
+type CustomerRow = Prisma.UserGetPayload<{ select: typeof customerProfileSelect }>;
+type PublicCustomer = Omit<CustomerRow, "avatarStorageKey">;
 export function publicCustomer(user: PublicCustomer): PublicCustomer {
   const { id, email, name, avatarUrl, emailVerifiedAt, phone, province, ward, addressDetail } = user;
   return { id, email, name, avatarUrl, emailVerifiedAt, phone, province, ward, addressDetail };

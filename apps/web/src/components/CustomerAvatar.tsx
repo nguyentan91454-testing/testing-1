@@ -9,6 +9,6 @@ export function CustomerAvatar({ customerId, avatarUrl, size = 26 }: { customerI
 function AvatarImage({ avatarUrl, size }: { avatarUrl: string | null; size: number }) {
   const [attempt, setAttempt] = useState(0);
   if (!avatarUrl || attempt > 1) return <UserRound size={size} aria-hidden="true"/>;
-  return <img src={attempt === 0 ? "/api/v1/auth/avatar" : avatarUrl} alt=""
+  return <img src={attempt === 0 ? "/api/v1/auth/avatar" : avatarUrl.startsWith("https://") ? avatarUrl : "data:,"} alt=""
     referrerPolicy="no-referrer" onError={() => setAttempt((value) => value + 1)}/>;
 }

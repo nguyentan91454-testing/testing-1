@@ -85,6 +85,7 @@ model User {
   email       String     @unique
   name        String
   avatarUrl   String?    @map("avatar_url")
+  avatarStorageKey String? @map("avatar_storage_key")
   phone       String?
   province    String?
   ward        String?
