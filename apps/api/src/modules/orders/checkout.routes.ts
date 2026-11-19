@@ -182,7 +182,7 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
     const input = checkoutSchema.parse(request.body);
     const idempotencyKey = z.string().uuid().parse(request.get("idempotency-key"));
     const sessionId = request.cookies?.[cartCookie] as string | undefined;
-    if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) throw new HttpError(400, "Giỏ hàng không hợp lệ", "CART_SESSION_REQUIRED");
+    if (!request.customer && (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId))) throw new HttpError(400, "Giỏ hàng không hợp lệ", "CART_SESSION_REQUIRED");
 
     const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, createdAt: true, trackingTokenHash: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
     if (previous) {
@@ -194,7 +194,11 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
 
     const normalizedPhone = normalizePhone(input.phone);
     const order = await prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.findFirst({ where: { sessionId }, include: { coupon: true } });
+      const cart = await tx.cart.findFirst({
+        where: request.customer ? { userId: request.customer.id } : { sessionId: sessionId!, userId: null },
+        orderBy: { updatedAt: "desc" },
+        include: { coupon: true },
+      });
       if (!cart) throw new HttpError(400, "Giỏ hàng đang trống", "CART_EMPTY");
       if (cart.couponId) requireCouponAccount(request.customer?.id);
       const items = await tx.cartItem.findMany({

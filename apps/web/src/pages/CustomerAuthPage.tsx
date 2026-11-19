@@ -30,7 +30,7 @@ export function CustomerAuthPage({ mode }: { mode: "login" | "register" }) {
       }
       queryClient.setQueryData(["customer"], user);
       queryClient.removeQueries({ queryKey: ["auth-providers"] });
-      queryClient.invalidateQueries({ queryKey: ["cart"] });
+      queryClient.resetQueries({ queryKey: ["cart"] });
       navigate(destination, { replace: true });
     },
     onError: (reason) => setError(reason instanceof Error ? reason.message : "Không thể đăng nhập. Vui lòng thử lại."),
@@ -45,7 +45,7 @@ export function CustomerAuthPage({ mode }: { mode: "login" | "register" }) {
     onSuccess: ({ isNewAccount, ...user }) => {
       queryClient.setQueryData(["customer"], user);
       queryClient.removeQueries({ queryKey: ["auth-providers"] });
-      queryClient.invalidateQueries({ queryKey: ["cart"] });
+      queryClient.resetQueries({ queryKey: ["cart"] });
       navigate(isNewAccount ? "/account/edit?welcome=true" : destination, { replace: true });
     },
     onError: (reason) => setError(reason instanceof ApiError ? reason.message : firebaseErrorMessage(reason)),

@@ -18,7 +18,7 @@ export function StorefrontLayout() {
   const cartQuery = useQuery({ queryKey: ["cart"], queryFn: api.cart });
   const customer = useQuery({ queryKey: ["customer"], queryFn: api.customer, retry: false });
   const categories = useQuery({ queryKey: ["categories"], queryFn: api.categories });
-  const logout = useMutation({ mutationFn: api.customerLogout, onSuccess: () => { setAccountMenuOpen(false); queryClient.setQueryData(["customer"], null); queryClient.invalidateQueries({ queryKey: ["cart"] }); } });
+  const logout = useMutation({ mutationFn: api.customerLogout, onSuccess: () => { setAccountMenuOpen(false); queryClient.setQueryData(["customer"], null); queryClient.resetQueries({ queryKey: ["cart"] }); } });
   const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
   useEffect(() => {

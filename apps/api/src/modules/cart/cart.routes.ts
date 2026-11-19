@@ -16,14 +16,41 @@ export const cartRouter = Router();
 cartRouter.use(optionalCustomer);
 
 async function getCart(request: Parameters<Parameters<typeof cartRouter.get>[1]>[0], response: Parameters<Parameters<typeof cartRouter.get>[1]>[1]) {
-  let sessionId = request.cookies?.[cookieName] as string | undefined;
-  if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) {
-    sessionId = randomBytes(32).toString("hex");
+  const cookieSessionId = request.cookies?.[cookieName] as string | undefined;
+  const validCookieSessionId = cookieSessionId && /^[a-f0-9]{64}$/.test(cookieSessionId) ? cookieSessionId : undefined;
+
+  if (request.customer) {
+    // An account must always use its own cart. A stale cart cookie can belong to
+    // another account after logout, so it must never be reassigned here.
+    let cart = await prisma.cart.findFirst({ where: { userId: request.customer.id }, orderBy: { updatedAt: "desc" } });
+    if (!cart && validCookieSessionId) {
+      const guestCart = await prisma.cart.findFirst({ where: { sessionId: validCookieSessionId, userId: null } });
+      if (guestCart) cart = await prisma.cart.update({ where: { id: guestCart.id }, data: { userId: request.customer.id } });
+    }
+    if (!cart) {
+      const sessionId = randomBytes(32).toString("hex");
+      cart = await prisma.cart.create({ data: { sessionId, userId: request.customer.id } });
+      response.cookie(cookieName, sessionId, cartCookieOptions);
+      return cart;
+    }
+    if (!cart.sessionId) {
+      const sessionId = randomBytes(32).toString("hex");
+      cart = await prisma.cart.update({ where: { id: cart.id }, data: { sessionId } });
+      response.cookie(cookieName, sessionId, cartCookieOptions);
+    } else if (cart.sessionId !== validCookieSessionId) {
+      response.cookie(cookieName, cart.sessionId, cartCookieOptions);
+    }
+    return cart;
+  }
+
+  // After logout, never expose the previous account's cart to an anonymous user.
+  let cart = validCookieSessionId ? await prisma.cart.findFirst({ where: { sessionId: validCookieSessionId } }) : null;
+  if (cart?.userId) cart = null;
+  if (!cart) {
+    const sessionId = randomBytes(32).toString("hex");
+    cart = await prisma.cart.create({ data: { sessionId, userId: null } });
     response.cookie(cookieName, sessionId, cartCookieOptions);
   }
-  let cart = await prisma.cart.findFirst({ where: { sessionId } });
-  if (!cart) cart = await prisma.cart.create({ data: { sessionId, userId: request.customer?.id ?? null } });
-  else if (request.customer && cart.userId !== request.customer.id) cart = await prisma.cart.update({ where: { id: cart.id }, data: { userId: request.customer.id } });
   return cart;
 }
 
