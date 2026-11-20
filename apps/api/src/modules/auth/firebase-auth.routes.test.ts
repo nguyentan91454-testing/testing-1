@@ -1,9 +1,12 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { SignJWT } from "jose";
 import type { AddressInfo } from "node:net";
 import { errorHandler } from "../../http/errors.js";
+import { getR2Client } from "../../lib/r2.js";
+import { FilesystemAvatarStorage } from "./customer-avatar-storage.js";
 
 const { db, config, firebase } = vi.hoisted(() => ({
   db: {
@@ -11,7 +14,11 @@ const { db, config, firebase } = vi.hoisted(() => ({
     customerSession: { create: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
   },
-  config: { NODE_ENV: "test", JWT_ACCESS_SECRET: "a-test-secret-at-least-32-characters-long", FIREBASE_PROJECT_ID: "firebase-project" },
+  config: {
+    NODE_ENV: "test", JWT_ACCESS_SECRET: "a-test-secret-at-least-32-characters-long", FIREBASE_PROJECT_ID: "firebase-project",
+    R2_ACCOUNT_ID: "", R2_ACCESS_KEY_ID: "test-access", R2_SECRET_ACCESS_KEY: "test-secret",
+    R2_PUBLIC_BUCKET: "test-catalog", R2_PRIVATE_BUCKET: "test-avatars",
+  },
   firebase: { verifyFirebaseIdToken: vi.fn() },
 }));
 vi.mock("../../config/env.js", () => ({ env: config }));
@@ -64,6 +71,60 @@ async function profileRequest(method: "GET" | "PATCH", body?: unknown, authentic
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
+
+describe("Customer avatar endpoint with R2", () => {
+  const avatarKey = "00000000-0000-4000-8000-000000000039.png";
+  async function requestAvatar() {
+    const token = await new SignJWT({ role: "customer" }).setProtectedHeader({ alg: "HS256" })
+      .setSubject(userId).setJti(sessionId).setExpirationTime("1h").sign(new TextEncoder().encode(config.JWT_ACCESS_SECRET));
+    return fetch(baseUrl + "/avatar", { redirect: "manual", headers: { cookie: "customer_session=" + token } });
+  }
+  beforeEach(() => {
+    config.R2_ACCOUNT_ID = "c".repeat(32);
+    db.user.findUniqueOrThrow.mockResolvedValue({ avatarUrl: "/api/v1/auth/avatar", avatarStorageKey: avatarKey });
+  });
+  afterEach(() => {
+    config.R2_ACCOUNT_ID = "";
+    vi.restoreAllMocks();
+  });
+
+  it("redirects the authenticated customer to a short-lived R2 URL without caching", async () => {
+    vi.spyOn(getR2Client()!, "send").mockResolvedValue(undefined);
+    const response = await requestAvatar();
+    expect(response.status).toBe(302);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const url = new URL(response.headers.get("location")!);
+    expect(url.pathname).toBe("/test-avatars/" + avatarKey);
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
+    expect(await response.text()).toBe("");
+  });
+
+  it("returns a clean image error if R2 is down and there is no local copy", async () => {
+    vi.spyOn(getR2Client()!, "send").mockRejectedValue(new Error("internal provider error"));
+    const response = await requestAvatar();
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.json()).toMatchObject({ code: "AVATAR_NOT_FOUND" });
+    expect((await profileRequest("GET")).status).toBe(200);
+  });
+
+  it("serves an existing local avatar while its R2 object is missing", async () => {
+    const localKey = randomUUID() + ".png";
+    const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+    const filesystem = new FilesystemAvatarStorage();
+    await filesystem.save(localKey, bytes);
+    try {
+      db.user.findUniqueOrThrow.mockResolvedValue({ avatarUrl: "/api/v1/auth/avatar", avatarStorageKey: localKey });
+      vi.spyOn(getR2Client()!, "send").mockRejectedValue({ $metadata: { httpStatusCode: 404 } });
+      const response = await requestAvatar();
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("image/png");
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+    } finally {
+      await filesystem.remove(localKey);
+    }
+  });
+});
 
 async function link(identityOverride: Partial<typeof identity> = {}) {
   const secret = new TextEncoder().encode(config.JWT_ACCESS_SECRET);

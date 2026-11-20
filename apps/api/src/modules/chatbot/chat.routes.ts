@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { optionalCustomer } from "../../http/customer-auth.js";
 import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { publicCatalogImageUrl } from "../catalog/catalog-image.js";
 import { containsPromptInjection, refusalText } from "./chatbot.prompts.js";
 import { generateChatAnswer, getChatPolicy, redactPersonalData, saveChatMessages } from "./chatbot.service.js";
 
@@ -116,7 +117,7 @@ chatRouter.post("/messages", optionalCustomer, chatIpLimiter, orderLookupLimiter
           slug: product.slug,
           name: product.name,
           priceVnd: minVariantPrice ?? (typeof product.minPriceVnd === "number" ? product.minPriceVnd : 0),
-          image: image && typeof image === "object" && typeof (image as { url?: unknown }).url === "string" ? { url: (image as { url: string }).url, alt: typeof (image as { alt?: unknown }).alt === "string" ? (image as { alt: string }).alt : product.name } : null,
+          image: image && typeof image === "object" && typeof (image as { url?: unknown }).url === "string" ? { url: publicCatalogImageUrl((image as { url: string }).url), alt: typeof (image as { alt?: unknown }).alt === "string" ? (image as { alt: string }).alt : product.name } : null,
           variantId: variants.find((variant) => variant && typeof variant === "object" && typeof (variant as { id?: unknown }).id === "string") ? (variants.find((variant) => variant && typeof variant === "object" && typeof (variant as { id?: unknown }).id === "string") as { id: string }).id : null,
         }];
       });

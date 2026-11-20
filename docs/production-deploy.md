@@ -39,6 +39,14 @@ EMAIL_FROM=Shop <orders@shop.example.com>
 
 Không đưa `.env` vào git. Chạy migration bằng `pnpm --filter @commerce/api db:deploy`, sau đó chạy seed một lần để tạo catalog và tài khoản quản trị.
 
+## Ảnh trên Cloudflare R2
+
+Dùng `konyappi-shop` làm bucket public cho ảnh sản phẩm, scene và banner. Ban đầu dùng Public Development URL thực `https://pub-....r2.dev` qua `R2_PUBLIC_BASE_URL`. Website có thể dùng Custom Domain sau này bằng cách đổi giá trị biến và build lại web.
+
+Dùng `konyappi-shop-private` cho avatar và giữ public access tắt. Chỉ cấp thông tin xác thực R2 cho API và các script migration. Web chỉ cần biến public base URL khi build.
+
+Upload bằng `node scripts/upload-catalog-to-r2.mjs` và chuyển avatar cũ bằng `node scripts/migrate-avatars-to-r2.mjs`. Trước khi bật URL public trên bản triển khai, chạy lại script catalog với URL thực và kiểm tra mọi ảnh đều truy cập được. Kiểm tra avatar qua một tài khoản thử theo [hướng dẫn quản lý ảnh](images.md).
+
 ## Kiểm tra sau deploy
 
 ```powershell

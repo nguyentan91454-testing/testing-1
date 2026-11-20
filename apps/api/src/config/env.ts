@@ -1,9 +1,11 @@
 import dotenv from "dotenv";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const apiRoot = basename(sourceRoot) === "dist" ? dirname(sourceRoot) : sourceRoot;
+dotenv.config({ path: resolve(apiRoot, "../../.env") });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -23,6 +25,20 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().default(""),
   GMAIL_USER: z.union([z.literal(""), z.string().email()]).default(""),
   GMAIL_APP_PASSWORD: z.string().default("").transform((value) => value.replace(/\s/g, "")),
+  R2_ACCOUNT_ID: z.string().default(""),
+  R2_ACCESS_KEY_ID: z.string().default(""),
+  R2_SECRET_ACCESS_KEY: z.string().default(""),
+  R2_PUBLIC_BUCKET: z.string().trim().default("konyappi-shop"),
+  R2_PRIVATE_BUCKET: z.string().trim().default("konyappi-shop-private"),
+  R2_PUBLIC_BASE_URL: z.string().trim().default("").superRefine((value, context) => {
+    if (!value) return;
+    try {
+      const url = new URL(value);
+      if (!value.startsWith("https://") || url.protocol !== "https:" || url.username || url.password || url.search || url.hash || value.includes("\\")) throw new Error("Invalid public base URL");
+    } catch {
+      context.addIssue({ code: "custom", message: "R2_PUBLIC_BASE_URL must be a valid HTTPS URL" });
+    }
+  }).transform((value) => value.replace(/\/+$/, "")),
   MAILPIT_SMTP_HOST: z.string().min(1).default("127.0.0.1"),
   MAILPIT_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
   EMAIL_FROM: z.string().default("Home & Decor <onboarding@resend.dev>"),

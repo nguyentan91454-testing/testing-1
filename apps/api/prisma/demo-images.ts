@@ -15,6 +15,7 @@ export async function ensureDemoProductImage(
   space: string,
 ) {
   if (await prisma.productImage.findFirst({ where: { productId: product.id }, select: { id: true } })) return;
+  // Keep a portable path in Prisma. Catalog responses apply the active public origin.
   const photo = sceneBySpace[space] ?? "photo-1616486029423-aaa4789e8c9a";
   const hash = createHash("sha256").update("demo-scene:" + product.id).digest("hex");
   const id = [hash.slice(0, 8), hash.slice(8, 12), hash.slice(12, 16), hash.slice(16, 20), hash.slice(20, 32)].join("-");

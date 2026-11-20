@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { HttpError } from "../../http/errors.js";
+import { publicCatalogImage, publicTaxonomyImage } from "./catalog-image.js";
 
 const querySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -91,7 +92,7 @@ catalogRouter.get("/", async (request, response, next) => {
 
     response.json({
       success: true,
-      data: items,
+      data: items.map((item) => ({ ...item, images: item.images.map(publicCatalogImage) })),
       meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
     });
   } catch (error) {
@@ -119,7 +120,12 @@ catalogRouter.get("/:slug", async (request, response, next) => {
       },
     });
     if (!product) throw new HttpError(404, "Không tìm thấy sản phẩm", "PRODUCT_NOT_FOUND");
-    response.json({ success: true, data: product });
+    response.json({ success: true, data: {
+      ...product,
+      images: product.images.map(publicCatalogImage),
+      spaces: product.spaces.map((link) => ({ ...link, space: publicTaxonomyImage(link.space) })),
+      styles: product.styles.map((link) => ({ ...link, style: publicTaxonomyImage(link.style) })),
+    } });
   } catch (error) {
     next(error);
   }

@@ -30,8 +30,9 @@ Vite runs at `http://localhost:5173` and proxies `/api` to the API at `http://lo
 - PostgreSQL + Prisma với các mô hình catalog, biến thể, giỏ, đơn, thanh toán, vận chuyển, coupon, chatbot và audit.
 - Module thuần tính giá VND và quy tắc chuyển trạng thái đơn, có unit test.
 - Catalog: `GET /api/v1/products` (lọc, sắp xếp, phân trang, tìm không dấu), `GET /api/v1/products/:slug`.
-- Ảnh không gian được lưu local trong `apps/web/public/images/scenes`. Seed thêm ảnh không gian minh họa cho sản phẩm mẫu chưa có ảnh, giữ nguyên ảnh đã có; ảnh Google tải qua API có cache và biểu tượng thay thế khi lỗi. Xem [cách quản lý ảnh](docs/images.md).
-- Người dùng có thể đổi hoặc xóa ảnh đại diện tại `/account/edit`; API nhận JPEG/PNG/WebP tối đa 5 MB và lưu riêng theo tài khoản.
+- Ảnh catalog dùng bucket Cloudflare R2 public `konyappi-shop` khi `R2_PUBLIC_BASE_URL` trỏ tới Public Development URL thực `https://pub-....r2.dev`. Có thể dùng Custom Domain bằng cùng biến. Khi chưa cấu hình, web và API tiếp tục dùng ảnh trong `apps/web/public/images`.
+- Người dùng có thể đổi hoặc xóa avatar JPEG/PNG/WebP tối đa 5 MB tại `/account/edit`. Bucket `konyappi-shop-private` giữ public access tắt và API cấp link đọc ngắn hạn. Nếu thiếu cấu hình R2, API dùng filesystem.
+- Chạy `node scripts/upload-catalog-to-r2.mjs` và `node scripts/migrate-avatars-to-r2.mjs` từ thư mục gốc. Giữ Access Key và Secret Key ngoài Git. Xem cách bật URL và kiểm tra ảnh sau khi chuyển. [Hướng dẫn quản lý ảnh](docs/images.md)
 - Giỏ khách vãng lai: `GET/POST/PATCH/DELETE /api/v1/cart` với session cookie HttpOnly; giá luôn lấy từ DB.
 - Mã giảm giá áp dụng/xóa tại `POST/DELETE /api/v1/cart/coupon`; cần đăng nhập Google để áp dụng và checkout kiểm tra lại điều kiện, lượt dùng, danh tính, giá giảm trong transaction.
 - Checkout demo: `POST /api/v1/orders`, cần header `Idempotency-Key`; kiểm tra tồn kho và tạo snapshot đơn trong transaction, trả token tra cứu có chữ ký hạn 30 ngày.

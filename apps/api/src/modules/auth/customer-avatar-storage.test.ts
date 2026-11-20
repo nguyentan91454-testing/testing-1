@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { removeStoredAvatar, readStoredAvatar, saveAvatar } from "./customer-avatar-storage.js";
+
+vi.mock("../../config/env.js", () => ({ env: { R2_ACCOUNT_ID: "" } }));
 
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 const created: string[] = [];

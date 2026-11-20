@@ -6,15 +6,16 @@ import { ProductGrid } from "../components/ProductGrid";
 import { LightingCalculator } from "../components/LightingCalculator";
 import { usePageMeta } from "../hooks/usePageMeta";
 
+const publicImage = (fileName: string) => import.meta.env.R2_PUBLIC_BASE_URL ? `${import.meta.env.R2_PUBLIC_BASE_URL}/scenes/${fileName}` : `/images/scenes/${fileName}`;
 const roomScenes = [
-  { slug: "phong-khach", name: "Phòng khách", note: "Nơi mọi người cùng trở về", image: "/images/scenes/photo-1600210492486-724fe5c67fb0.jpg", className: "room-wide" },
-  { slug: "ban-an", name: "Bàn ăn", note: "Bữa cơm thêm ấm áp", image: "/images/scenes/photo-1600607687939-ce8a6c25118c.jpg", className: "" },
-  { slug: "phong-ngu", name: "Phòng ngủ", note: "Một khoảng nghỉ dịu dàng", image: "/images/scenes/photo-1616486338812-3dadae4b4ace.jpg", className: "" },
+  { slug: "phong-khach", name: "Phòng khách", note: "Nơi mọi người cùng trở về", image: publicImage("photo-1600210492486-724fe5c67fb0.jpg"), className: "room-wide" },
+  { slug: "ban-an", name: "Bàn ăn", note: "Bữa cơm thêm ấm áp", image: publicImage("photo-1600607687939-ce8a6c25118c.jpg"), className: "" },
+  { slug: "phong-ngu", name: "Phòng ngủ", note: "Một khoảng nghỉ dịu dàng", image: publicImage("photo-1616486338812-3dadae4b4ace.jpg"), className: "" },
 ];
 const styles = [
-  { slug: "bac-au", name: "Bắc Âu", image: "/images/scenes/photo-1600210492493-0946911123ea.jpg" },
-  { slug: "hien-dai", name: "Hiện đại", image: "/images/scenes/photo-1600607687920-4e2a09cf159d.jpg" },
-  { slug: "indochine", name: "Indochine", image: "/images/scenes/photo-1616486029423-aaa4789e8c9a.jpg" },
+  { slug: "bac-au", name: "Bắc Âu", image: publicImage("photo-1600210492493-0946911123ea.jpg") },
+  { slug: "hien-dai", name: "Hiện đại", image: publicImage("photo-1600607687920-4e2a09cf159d.jpg") },
+  { slug: "indochine", name: "Indochine", image: publicImage("photo-1616486029423-aaa4789e8c9a.jpg") },
 ];
 
 export function HomePage() {
@@ -27,16 +28,16 @@ export function HomePage() {
     <>
       <section className="catalog-departments wrap" aria-label="Shop by department">
         <Link to="/products?category=home-appliances" className="catalog-department-tile">
-          <img src="/images/scenes/photo-1556911220-e15b29be8c8f.jpg" alt="Thiết bị gia dụng trong không gian bếp hiện đại" />
+          <img src={publicImage("photo-1556911220-e15b29be8c8f.jpg")} alt="Thiết bị gia dụng trong không gian bếp hiện đại" />
           <span><small>HOME APPLIANCES</small><strong>Thiết bị cho nhịp sống mỗi ngày</strong></span>
         </Link>
         <Link to="/products?category=home-decor" className="catalog-department-tile">
-          <img src="/images/scenes/photo-1616486029423-aaa4789e8c9a.jpg" alt="Không gian sống với đồ trang trí và nội thất" />
+          <img src={publicImage("photo-1616486029423-aaa4789e8c9a.jpg")} alt="Không gian sống với đồ trang trí và nội thất" />
           <span><small>HOME DECOR</small><strong>Chi tiết tạo nên không gian riêng</strong></span>
         </Link>
       </section>
       <section className="hero" aria-label="Bộ sưu tập ánh sáng Konyappi Shop">
-        <img className="hero-image" src="/images/scenes/photo-1600210492486-724fe5c67fb0.jpg" alt="Phòng khách sáng thoáng với ánh sáng dịu và chất liệu gỗ tự nhiên" fetchPriority="high" />
+        <img className="hero-image" src={publicImage("photo-1600210492486-724fe5c67fb0.jpg")} alt="Phòng khách sáng thoáng với ánh sáng dịu và chất liệu gỗ tự nhiên" fetchPriority="high" />
         <div className="hero-shade" />
         <div className="wrap hero-content"><span className="hero-kicker"><i /> CHỌN ÁNH SÁNG CHO TỔ ẤM</span><h1>Ánh sáng dịu,<br />nhà mình vui.</h1><p>Những thiết kế đèn được chọn theo không gian, chiều cao trần và nhịp sống của bạn.</p><div className="hero-actions"><Link to="/products" className="button button-lime">Khám phá bộ sưu tập <ArrowRight size={17} /></Link><a href="#spaces" className="hero-secondary">Tìm theo không gian <ArrowDown size={15} /></a></div></div>
         <div className="hero-caption"><span>01 / 03</span><span>Ánh sáng trong không gian sống</span><span className="caption-line" /></div>

@@ -8,6 +8,7 @@ import { optionalCustomer } from "../../http/customer-auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { calculatePrice } from "../pricing/pricing.js";
 import { couponDiscount, normalizeCouponCode, requireCouponAccount } from "../pricing/coupon.js";
+import { publicCatalogImage } from "../catalog/catalog-image.js";
 
 const cookieName = "cart_session";
 const cartCookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "lax" as const, path: "/api/v1", maxAge: 30 * 24 * 60 * 60 * 1000 };
@@ -104,7 +105,7 @@ async function readCart(cartId: string) {
       variantId: item.variantId,
       sku: item.variant!.sku,
       productName: item.variant!.product.name,
-      image: item.variant!.product.images[0] ?? null,
+      image: item.variant!.product.images[0] ? publicCatalogImage(item.variant!.product.images[0]) : null,
       quantity: item.quantity,
       unitPriceVnd: item.variant!.priceVnd,
       lineTotalVnd: item.variant!.priceVnd * item.quantity,

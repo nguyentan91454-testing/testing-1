@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { publicTaxonomyImage } from "./catalog-image.js";
 
 export const taxonomyRouter = Router();
 
@@ -20,7 +21,7 @@ taxonomyRouter.get("/spaces", async (_request, response, next) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, slug: true, name: true, imageUrl: true, sortOrder: true },
     });
-    response.json({ success: true, data });
+    response.json({ success: true, data: data.map(publicTaxonomyImage) });
   } catch (error) { next(error); }
 });
 
@@ -30,6 +31,6 @@ taxonomyRouter.get("/styles", async (_request, response, next) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, slug: true, name: true, imageUrl: true, sortOrder: true },
     });
-    response.json({ success: true, data });
+    response.json({ success: true, data: data.map(publicTaxonomyImage) });
   } catch (error) { next(error); }
 });

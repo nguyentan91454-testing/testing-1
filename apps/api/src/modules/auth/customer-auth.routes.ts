@@ -14,7 +14,8 @@ import { sendVerificationEmail } from "../email/email.service.js";
 import { customerProfileSelect, publicCustomer, updateProfileSchema } from "./customer-profile.js";
 import { loadCustomerAvatar } from "./customer-avatar.js";
 import multer from "multer";
-import { avatarMimeExtension, avatarUploadLimit, readStoredAvatar, removeStoredAvatar, saveAvatar } from "./customer-avatar-storage.js";
+import { avatarMimeExtension, avatarUploadLimit, getStoredAvatarUrl, readStoredAvatar, removeStoredAvatar, saveAvatar } from "./customer-avatar-storage.js";
+import { logger } from "../../lib/logger.js";
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
@@ -150,8 +151,20 @@ customerAuthRouter.get("/me", requireCustomer, async (request, response, next) =
 customerAuthRouter.get("/avatar", requireCustomer, async (request, response, next) => {
   try {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarUrl: true, avatarStorageKey: true } });
-    const avatar = user.avatarStorageKey ? await readStoredAvatar(user.avatarStorageKey) : await loadCustomerAvatar(user.avatarUrl);
     response.setHeader("Cache-Control", "private, no-store");
+    if (user.avatarStorageKey) {
+      let signedUrl: string | null = null;
+      try {
+        signedUrl = await getStoredAvatarUrl(user.avatarStorageKey);
+      } catch {
+        logger.warn({ userId: request.customer!.id }, "Unable to sign customer avatar in R2");
+      }
+      if (signedUrl) {
+        response.status(302).location(signedUrl).end();
+        return;
+      }
+    }
+    const avatar = user.avatarStorageKey ? await readStoredAvatar(user.avatarStorageKey) : await loadCustomerAvatar(user.avatarUrl);
     response.type(avatar.contentType).send(avatar.bytes);
   } catch (error) { next(error); }
 });
@@ -176,13 +189,19 @@ customerAuthRouter.post("/profile/avatar", requireCustomer, (request, response, 
     const file = request.file;
     if (!file) throw new HttpError(400, "Hãy chọn một ảnh đại diện.", "AVATAR_REQUIRED");
     const old = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarStorageKey: true } });
-    const key = await saveAvatar(file.buffer, file.mimetype);
+    let key: string;
+    try { key = await saveAvatar(file.buffer, file.mimetype); }
+    catch (error) {
+      if (error instanceof HttpError) throw error;
+      logger.warn({ userId: request.customer!.id }, "Unable to store customer avatar");
+      throw new HttpError(503, "Chưa thể lưu ảnh đại diện. Vui lòng thử lại.", "AVATAR_STORAGE_UNAVAILABLE");
+    }
     try {
-      const user = await prisma.user.update({ where: { id: request.customer!.id }, data: { avatarUrl: "/api/v1/auth/avatar", avatarStorageKey: key }, select: customerProfileSelect });
-      await removeStoredAvatar(old.avatarStorageKey);
+      const user = await prisma.user.update({ where: { id: request.customer!.id, avatarStorageKey: old.avatarStorageKey }, data: { avatarUrl: "/api/v1/auth/avatar", avatarStorageKey: key }, select: customerProfileSelect });
+      try { await removeStoredAvatar(old.avatarStorageKey); } catch { logger.warn({ userId: request.customer!.id }, "Unable to remove previous customer avatar"); }
       response.json({ success: true, data: publicCustomer(user) });
     } catch (error) {
-      await removeStoredAvatar(key);
+      try { await removeStoredAvatar(key); } catch { logger.warn({ userId: request.customer!.id }, "Unable to clean up uploaded customer avatar"); }
       throw error;
     }
   } catch (error) { next(error); }
@@ -190,9 +209,17 @@ customerAuthRouter.post("/profile/avatar", requireCustomer, (request, response, 
 
 customerAuthRouter.delete("/profile/avatar", requireCustomer, async (request, response, next) => {
   try {
-    const old = await prisma.user.findUniqueOrThrow({ where: { id: request.customer!.id }, select: { avatarStorageKey: true, avatarUrl: true } });
-    const user = await prisma.user.update({ where: { id: request.customer!.id }, data: { avatarUrl: null, avatarStorageKey: null }, select: customerProfileSelect });
-    await removeStoredAvatar(old.avatarStorageKey);
+    const userId = request.customer!.id;
+    const user = await prisma.$transaction(async (tx) => {
+      const old = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { avatarStorageKey: true } });
+      const updated = await tx.user.update({ where: { id: userId, avatarStorageKey: old.avatarStorageKey }, data: { avatarUrl: null, avatarStorageKey: null }, select: customerProfileSelect });
+      try { await removeStoredAvatar(old.avatarStorageKey); }
+      catch {
+        logger.warn({ userId }, "Unable to remove customer avatar object");
+        throw new HttpError(503, "Chưa thể xóa ảnh đại diện. Vui lòng thử lại.", "AVATAR_STORAGE_UNAVAILABLE");
+      }
+      return updated;
+    }, { timeout: 15_000 });
     response.json({ success: true, data: publicCustomer(user) });
   } catch (error) { next(error); }
 });
