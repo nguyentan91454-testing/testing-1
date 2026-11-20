@@ -69,10 +69,10 @@ export function StorefrontLayout() {
             <button type="submit" className="search-submit" aria-label="Tìm kiếm"><ArrowRight size={17} /></button>
           </form>
           <div className="header-actions">
-            <ThemeToggle />
             <Link className="header-text-link" to="/products">Khám phá</Link>
             {customer.data ? <div className="customer-account-menu-wrap" ref={accountMenuRef}><button className="customer-account-link" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)} title="Mở menu tài khoản"><CustomerAvatar customerId={customer.data.id} avatarUrl={customer.data.avatarUrl} size={16}/><span>{customer.data.name||"Tài khoản"}</span><ChevronDown size={13}/></button>{accountMenuOpen&&<div className="customer-account-menu" role="menu"><Link role="menuitem" to="/account" onClick={()=>setAccountMenuOpen(false)}><UserRound size={16}/><span>Thông tin cá nhân</span></Link><button role="menuitem" type="button" onClick={()=>logout.mutate()} disabled={logout.isPending}><LogOut size={16}/><span>{logout.isPending?"Đang đăng xuất…":"Đăng xuất"}</span></button></div>}</div> : <Link className="customer-account-link" to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} aria-label="Đăng nhập"><UserRound size={17}/><span>Đăng nhập</span></Link>}
             <Link className="bag-link" to="/cart" aria-label={`Giỏ hàng, ${cartCount} sản phẩm`}><ShoppingBag size={21} /><span>Giỏ hàng</span><b>{cartQuery.isLoading ? "–" : cartCount}</b></Link>
+            <ThemeToggle />
           </div>
         </div>
         <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} aria-label="Điều hướng chính">

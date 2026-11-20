@@ -4,6 +4,19 @@ export interface Customer {
   id: string; email: string; name: string; avatarUrl: string | null; emailVerifiedAt: string | null;
   phone: string | null; province: string | null; ward: string | null; addressDetail: string | null;
 }
+export interface CustomerAddress {
+  id: string;
+  label: string | null;
+  recipientName: string;
+  phone: string;
+  province: string;
+  district: string;
+  ward: string;
+  addressDetail: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 export type ProfileUpdate = Partial<Pick<Customer, "name" | "phone" | "province" | "ward" | "addressDetail">>;
 export type FirebaseLoginResult = Customer & { isNewAccount: boolean };
 export interface RegistrationResult { verificationRequired: true; emailSent: boolean; email: string }
@@ -64,6 +77,11 @@ export const api = {
   applyCoupon: (code: string) => request<Cart>("/cart/coupon", { method: "POST", body: JSON.stringify({ code }) }),
   removeCoupon: () => request<Cart>("/cart/coupon", { method: "DELETE" }),
   customer: () => request<Customer>("/auth/me"),
+  addresses: () => request<CustomerAddress[]>("/auth/addresses"),
+  createAddress: (input: Omit<CustomerAddress, "id" | "createdAt" | "updatedAt">) => request<CustomerAddress>("/auth/addresses", { method: "POST", body: JSON.stringify(input) }),
+  updateAddress: (id: string, input: Partial<Omit<CustomerAddress, "id" | "createdAt" | "updatedAt">>) => request<CustomerAddress>(`/auth/addresses/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  setDefaultAddress: (id: string) => request<CustomerAddress>(`/auth/addresses/${id}/default`, { method: "POST" }),
+  deleteAddress: (id: string) => request<CustomerAddress[]>(`/auth/addresses/${id}`, { method: "DELETE" }),
   customerLogin: (input: { email: string; password: string }) => request<Customer>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
   customerRegister: (input: { name: string; email: string; password: string }) => request<RegistrationResult>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
   customerFirebase: (idToken: string) => request<FirebaseLoginResult>("/auth/firebase", { method: "POST", headers: { authorization: `Bearer ${idToken}` }, body: JSON.stringify({}) }),

@@ -17,6 +17,7 @@ const checkoutSchema = z.object({
   phone: z.string().trim().min(9).max(24),
   email: z.string().email().max(254),
   province: z.string().trim().min(2).max(100),
+  district: z.string().trim().min(2).max(100),
   ward: z.string().trim().min(2).max(100),
   addressDetail: z.string().trim().min(5).max(500),
   paymentMethod: z.enum(["COD", "VIETQR"]),
@@ -233,10 +234,10 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
         const now = new Date();
         if (!coupon || !coupon.isActive || coupon.startsAt > now || coupon.endsAt <= now) throw new HttpError(400, "Mã giảm giá không hợp lệ hoặc đã hết hạn", "COUPON_INVALID");
         if (subtotalVnd < coupon.minOrderVnd) throw new HttpError(400, "Giá trị đơn hàng chưa đạt mức tối thiểu của mã giảm giá", "COUPON_MIN_ORDER");
-        couponHashes = couponIdentityHashes({ phone: normalizedPhone, address: `${input.province}|${input.ward}|${input.addressDetail}` });
+        couponHashes = couponIdentityHashes({ phone: normalizedPhone, address: `${input.province}|${input.district}|${input.ward}|${input.addressDetail}` });
         const previousCustomerOrder = await tx.order.findFirst({ where: { OR: [
           { phone: normalizedPhone },
-          { province: { equals: input.province, mode: "insensitive" }, ward: { equals: input.ward, mode: "insensitive" }, addressDetail: { equals: input.addressDetail, mode: "insensitive" } },
+          { province: { equals: input.province, mode: "insensitive" }, district: { equals: input.district, mode: "insensitive" }, ward: { equals: input.ward, mode: "insensitive" }, addressDetail: { equals: input.addressDetail, mode: "insensitive" } },
         ] }, select: { id: true } });
         if (coupon.newCustomerOnly && previousCustomerOrder) throw new HttpError(400, "Mã này chỉ áp dụng cho khách hàng mới", "COUPON_NEW_CUSTOMER_ONLY");
         const identityLimits = [
@@ -287,6 +288,7 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
           phone: normalizedPhone,
           email: input.email.toLowerCase(),
           province: input.province,
+          district: input.district,
           ward: input.ward,
           addressDetail: input.addressDetail,
           subtotalVnd: price.subtotalVnd,

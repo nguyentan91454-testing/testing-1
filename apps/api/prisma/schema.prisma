@@ -93,6 +93,7 @@ model User {
   status      UserStatus @default(ACTIVE)
   orders      Order[]
   carts       Cart[]
+  addresses   CustomerAddress[]
   sessions    CustomerSession[]
   redemptions CouponRedemption[]
   chatSessions ChatSession[]
@@ -102,6 +103,25 @@ model User {
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("users")
+}
+
+model CustomerAddress {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  label         String?
+  recipientName String   @map("recipient_name")
+  phone         String
+  province      String
+  district      String
+  ward          String
+  addressDetail String   @map("address_detail")
+  isDefault     Boolean  @default(false) @map("is_default")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([userId, isDefault])
+  @@map("customer_addresses")
 }
 
 model AdminUser {
@@ -524,6 +544,7 @@ model Order {
   phone                 String
   email                 String
   province              String
+  district              String        @default("")
   ward                  String
   addressDetail         String        @map("address_detail")
   subtotalVnd           Int           @map("subtotal_vnd")

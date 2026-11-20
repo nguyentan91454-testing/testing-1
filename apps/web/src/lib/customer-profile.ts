@@ -9,14 +9,10 @@ const optionalText = (schema: z.ZodString, message: string) => z.string().trim()
 export const profileFormSchema = z.object({
   name: z.string().trim().min(2, "Họ tên cần ít nhất 2 ký tự.").max(120, "Họ tên không quá 120 ký tự."),
   phone: optionalText(phoneSchema, "Nhập số điện thoại hợp lệ, có ít nhất 9 chữ số và không quá 24 ký tự."),
-  province: optionalText(z.string().min(2).max(100), "Tỉnh / thành phố cần từ 2 đến 100 ký tự."),
-  ward: optionalText(z.string().min(2).max(100), "Phường / xã cần từ 2 đến 100 ký tự."),
-  addressDetail: optionalText(z.string().min(5).max(500), "Địa chỉ cần từ 5 đến 500 ký tự."),
 });
 export type ProfileFormValues = z.infer<typeof profileFormSchema>;
 export function profileFormValues(customer: Customer): ProfileFormValues {
-  return { name: customer.name, phone: customer.phone ?? "", province: customer.province ?? "",
-    ward: customer.ward ?? "", addressDetail: customer.addressDetail ?? "" };
+  return { name: customer.name, phone: customer.phone ?? "" };
 }
 
 export function checkoutProfileValues(customer: Customer) {
