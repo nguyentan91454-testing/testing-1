@@ -94,7 +94,7 @@ async function main() {
   for (const [slug, name] of spaces) await prisma.space.upsert({ where: { slug }, update: { name }, create: { slug, name } });
   const styles = [ ["indochine", "Indochine"], ["bac-au", "Bắc Âu"], ["hien-dai", "Hiện đại"] ] as const;
   for (const [slug, name] of styles) await prisma.style.upsert({ where: { slug }, update: { name }, create: { slug, name } });
-  const brand = await prisma.brand.upsert({ where: { slug: "nha-minh" }, update: { name: "Nhà Mình" }, create: { slug: "nha-minh", name: "Nhà Mình" } });
+  const brand = await prisma.brand.upsert({ where: { slug: "nha-minh" }, update: { name: "Konyappi Shop" }, create: { slug: "nha-minh", name: "Konyappi Shop" } });
 
   for (const item of products) {
     const category = await prisma.category.findUniqueOrThrow({ where: { slug: item.category } });

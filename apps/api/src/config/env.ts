@@ -41,7 +41,7 @@ const envSchema = z.object({
   }).transform((value) => value.replace(/\/+$/, "")),
   MAILPIT_SMTP_HOST: z.string().min(1).default("127.0.0.1"),
   MAILPIT_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
-  EMAIL_FROM: z.string().default("Home & Decor <onboarding@resend.dev>"),
+  EMAIL_FROM: z.string().default("Konyappi Shop <onboarding@resend.dev>"),
 }).refine((value) => Boolean(value.GMAIL_USER) === Boolean(value.GMAIL_APP_PASSWORD), {
   message: "Cần cấu hình cả GMAIL_USER và GMAIL_APP_PASSWORD để gửi thư qua Gmail.",
   path: ["GMAIL_USER"],

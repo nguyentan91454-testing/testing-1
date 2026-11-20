@@ -22,7 +22,7 @@ export interface RenderedEmail {
 export function renderVerificationEmail(input: { name: string; verificationUrl: string }): RenderedEmail {
   const name = escapeHtml(input.name);
   const url = escapeHtml(input.verificationUrl);
-  return layout("Xác minh email tài khoản Nhà Mình", `Chào ${input.name},\nVui lòng mở liên kết sau để xác minh email: ${input.verificationUrl}\nLiên kết có hiệu lực trong 24 giờ.`, `<p>Chào ${name}, vui lòng xác minh email để hoàn tất đăng ký tài khoản.</p><p><a href="${url}" style="display:inline-block;padding:12px 18px;background:#2f6549;color:#fff;text-decoration:none">Xác minh email</a></p><p>Liên kết có hiệu lực trong 24 giờ.</p>`);
+  return layout("Xác minh email tài khoản Konyappi Shop", `Chào ${input.name},\nVui lòng mở liên kết sau để xác minh email: ${input.verificationUrl}\nLiên kết có hiệu lực trong 24 giờ.`, `<p>Chào ${name}, vui lòng xác minh email để hoàn tất đăng ký tài khoản.</p><p><a href="${url}" style="display:inline-block;padding:12px 18px;background:#2f6549;color:#fff;text-decoration:none">Xác minh email</a></p><p>Liên kết có hiệu lực trong 24 giờ.</p>`);
 }
 
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} đ`;
@@ -31,8 +31,8 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&"
 function layout(title: string, bodyText: string, bodyHtml: string): RenderedEmail {
   return {
     subject: title,
-    text: `${title}\n\n${bodyText}\n\nNhà Mình` ,
-    html: `<!doctype html><html lang="vi"><body style="margin:0;background:#f3f5f4;color:#202725;font-family:Arial,sans-serif"><main style="max-width:600px;margin:24px auto;padding:28px;background:#fff"><p style="color:#087f68;font-weight:700">NHÀ MÌNH</p><h1 style="font-size:22px">${escapeHtml(title)}</h1>${bodyHtml}<p style="margin-top:28px;color:#66716d">Cảm ơn bạn đã tin tưởng Nhà Mình.</p></main></body></html>`,
+    text: `${title}\n\n${bodyText}\n\nKonyappi Shop` ,
+    html: `<!doctype html><html lang="vi"><body style="margin:0;background:#f3f5f4;color:#202725;font-family:Arial,sans-serif"><main style="max-width:600px;margin:24px auto;padding:28px;background:#fff"><p style="color:#087f68;font-weight:700">Konyappi Shop</p><h1 style="font-size:22px">${escapeHtml(title)}</h1>${bodyHtml}<p style="margin-top:28px;color:#66716d">Cảm ơn bạn đã tin tưởng Konyappi Shop.</p></main></body></html>`,
   };
 }
 
@@ -49,14 +49,14 @@ export function renderOrderEmail(type: OrderEmailType, order: EmailOrder): Rende
   const items = itemRows(order);
   switch (type) {
     case "ORDER_CONFIRMATION":
-      return layout(`Nhà Mình đã nhận đơn ${order.code}`, `Chào ${order.customerName},\nĐơn ${order.code} đã được ghi nhận.\n${items.text}\nTổng đơn: ${money(order.totalVnd)}\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu: ${money(order.codAmountVnd)}${order.trackingUrl ? `\nTheo dõi đơn: ${order.trackingUrl}` : ""}`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được ghi nhận.</p>${items.html}<p>Tổng đơn: <strong>${money(order.totalVnd)}</strong><br>Đã thanh toán: ${money(order.paidVnd)}<br>Còn thu: ${money(order.codAmountVnd)}</p>${order.trackingUrl ? `<p><a href="${escapeHtml(order.trackingUrl)}">Theo dõi đơn hàng</a></p>` : ""}`);
+      return layout(`Konyappi Shop đã nhận đơn ${order.code}`, `Chào ${order.customerName},\nĐơn ${order.code} đã được ghi nhận.\n${items.text}\nTổng đơn: ${money(order.totalVnd)}\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu: ${money(order.codAmountVnd)}${order.trackingUrl ? `\nTheo dõi đơn: ${order.trackingUrl}` : ""}`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được ghi nhận.</p>${items.html}<p>Tổng đơn: <strong>${money(order.totalVnd)}</strong><br>Đã thanh toán: ${money(order.paidVnd)}<br>Còn thu: ${money(order.codAmountVnd)}</p>${order.trackingUrl ? `<p><a href="${escapeHtml(order.trackingUrl)}">Theo dõi đơn hàng</a></p>` : ""}`);
     case "PAYMENT_RECEIVED":
-      return layout(`Đã nhận thanh toán đơn ${order.code}`, `Chào ${order.customerName},\nNhà Mình đã nhận thanh toán cho đơn ${order.code}.\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu khi giao: ${money(order.codAmountVnd)}`, `<p>Chào ${name}, Nhà Mình đã nhận thanh toán cho đơn <strong>${code}</strong>.</p><p>Đã thanh toán: <strong>${money(order.paidVnd)}</strong><br>Còn thu khi giao: ${money(order.codAmountVnd)}</p>`);
+      return layout(`Đã nhận thanh toán đơn ${order.code}`, `Chào ${order.customerName},\nKonyappi Shop đã nhận thanh toán cho đơn ${order.code}.\nĐã thanh toán: ${money(order.paidVnd)}\nCòn thu khi giao: ${money(order.codAmountVnd)}`, `<p>Chào ${name}, Konyappi Shop đã nhận thanh toán cho đơn <strong>${code}</strong>.</p><p>Đã thanh toán: <strong>${money(order.paidVnd)}</strong><br>Còn thu khi giao: ${money(order.codAmountVnd)}</p>`);
     case "ORDER_SHIPPED": {
       const trackingCode = order.shipment?.trackingCode;
       return layout(`Đơn ${order.code} đang được giao`, `Chào ${order.customerName},\nĐơn ${order.code} đã được bàn giao cho đơn vị vận chuyển.${trackingCode ? `\nMã vận đơn: ${trackingCode}` : ""}`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được bàn giao cho đơn vị vận chuyển.</p>${trackingCode ? `<p>Mã vận đơn: <strong>${escapeHtml(trackingCode)}</strong></p>` : ""}`);
     }
     case "ORDER_CANCELLED":
-      return layout(`Đơn ${order.code} đã được hủy`, `Chào ${order.customerName},\nĐơn ${order.code} đã được hủy. Nếu bạn cần hỗ trợ, vui lòng liên hệ Nhà Mình.`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được hủy.</p><p>Nếu bạn cần hỗ trợ, vui lòng liên hệ Nhà Mình.</p>`);
+      return layout(`Đơn ${order.code} đã được hủy`, `Chào ${order.customerName},\nĐơn ${order.code} đã được hủy. Nếu bạn cần hỗ trợ, vui lòng liên hệ Konyappi Shop.`, `<p>Chào ${name}, đơn <strong>${code}</strong> đã được hủy.</p><p>Nếu bạn cần hỗ trợ, vui lòng liên hệ Konyappi Shop.</p>`);
   }
 }

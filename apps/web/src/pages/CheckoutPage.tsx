@@ -62,18 +62,21 @@ export function CheckoutPage() {
   }, [customer.data, form]);
   useEffect(() => {
     const address = addresses.data?.find((item) => item.isDefault) ?? addresses.data?.[0];
-    if (!address || prefilledAddress.current === address.id || editedFields.current.size > 0) return;
+    if (!address || locationsLoading || prefilledAddress.current === address.id || editedFields.current.size > 0) return;
     applyAddress(address);
     prefilledAddress.current = address.id;
-  }, [addresses.data]);
+  }, [addresses.data, locationsLoading]);
   function applyAddress(address: CustomerAddress) {
     setSelectedAddressId(address.id);
-    form.setValue("customerName", address.recipientName, { shouldDirty: false });
-    form.setValue("phone", address.phone, { shouldDirty: false });
-    form.setValue("province", address.province, { shouldDirty: false });
-    form.setValue("district", address.district, { shouldDirty: false });
-    form.setValue("ward", address.ward, { shouldDirty: false });
-    form.setValue("addressDetail", address.addressDetail, { shouldDirty: false });
+    form.reset({
+      ...form.getValues(),
+      customerName: address.recipientName,
+      phone: address.phone,
+      province: address.province,
+      district: address.district,
+      ward: address.ward,
+      addressDetail: address.addressDetail,
+    }, { keepDirty: true, keepTouched: true, keepErrors: true });
     for (const field of ["customerName", "phone", "province", "district", "ward", "addressDetail"]) editedFields.current.delete(field);
   }
   const selectedProvince = locations.find((province) => province.name === form.watch("province"));

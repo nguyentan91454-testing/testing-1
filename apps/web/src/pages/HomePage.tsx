@@ -39,7 +39,7 @@ export function HomePage() {
       <section className="hero" aria-label="Bộ sưu tập ánh sáng Konyappi Shop">
         <img className="hero-image" src={publicImage("photo-1600210492486-724fe5c67fb0.jpg")} alt="Phòng khách sáng thoáng với ánh sáng dịu và chất liệu gỗ tự nhiên" fetchPriority="high" />
         <div className="hero-shade" />
-        <div className="wrap hero-content"><span className="hero-kicker"><i /> CHỌN ÁNH SÁNG CHO TỔ ẤM</span><h1>Ánh sáng dịu,<br />nhà mình vui.</h1><p>Những thiết kế đèn được chọn theo không gian, chiều cao trần và nhịp sống của bạn.</p><div className="hero-actions"><Link to="/products" className="button button-lime">Khám phá bộ sưu tập <ArrowRight size={17} /></Link><a href="#spaces" className="hero-secondary">Tìm theo không gian <ArrowDown size={15} /></a></div></div>
+        <div className="wrap hero-content"><span className="hero-kicker"><i /> Konyappi Shop</span><h1>Ánh sáng dịu<br />cho từng không gian.</h1><p>Những thiết kế đèn được chọn theo không gian, chiều cao trần và nhịp sống của bạn.</p><div className="hero-actions"><Link to="/products" className="button button-lime">Khám phá bộ sưu tập <ArrowRight size={17} /></Link><a href="#spaces" className="hero-secondary">Tìm theo không gian <ArrowDown size={15} /></a></div></div>
         <div className="hero-caption"><span>01 / 03</span><span>Ánh sáng trong không gian sống</span><span className="caption-line" /></div>
         <span className="demo-stamp">ẢNH MINH HỌA · ĐỒ ÁN DEMO</span>
       </section>
@@ -57,7 +57,7 @@ export function HomePage() {
       <section className="style-band"><div className="wrap"><div className="section-heading"><div><span className="eyebrow">TỪ CHẤT LIỆU ĐẾN CẢM XÚC</span><h2>Phong cách bạn gọi là nhà.</h2></div><Link to="/products" className="text-link">Khám phá phong cách <ArrowRight size={16} /></Link></div><div className="style-grid">{styles.map((style) => <Link className="style-tile" to={`/products?style=${style.slug}`} key={style.slug}><img src={style.image} alt={`Nội thất phong cách ${style.name}`} loading="lazy"/><span>{style.name}</span><ArrowRight size={18} /></Link>)}</div></div></section>
 
       <section className="lighting-band" id="lighting"><div className="wrap"><LightingCalculator /></div></section>
-      <section className="closing-note wrap"><span className="closing-mark">n.</span><p>Nhà mình không cần hoàn hảo.<br /><strong>Chỉ cần đúng với mình.</strong></p><Link to="/products" className="button button-outline">Tìm chiếc đèn của bạn <ArrowRight size={16} /></Link></section>
+      <section className="closing-note wrap"><span className="closing-mark" aria-hidden="true">K</span><p>Ánh sáng từ Konyappi Shop.<br /><strong>Chọn chiếc đèn hợp với bạn.</strong></p><Link to="/products" className="button button-outline">Xem bộ sưu tập <ArrowRight size={16} /></Link></section>
     </>
   );
 }

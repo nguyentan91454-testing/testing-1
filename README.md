@@ -1,4 +1,4 @@
-# Home & Decor Commerce
+# Konyappi Shop
 
 ## Quick start
 
