@@ -49,14 +49,15 @@ export interface CheckoutResult {
   id: string;
   code: string;
   totalVnd: number;
+  paidVnd: number;
   paymentStatus: string;
   orderStatus: string;
   codAmountVnd: number;
   depositRequiredVnd: number;
   payment: { id: string; type: string; amountVnd: number; provider: "MOCK"; qr: { mode: "DEMO"; payload: string; imageUrl: string } } | null;
-  trackingToken: string;
-  trackingExpiresAt: string;
-  isDemo: true;
+  trackingToken: string | null;
+  trackingExpiresAt: string | null;
+  isDemo: boolean;
 }
 
 export interface CartItem {

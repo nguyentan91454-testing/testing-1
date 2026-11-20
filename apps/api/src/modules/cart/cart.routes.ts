@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../../config/env.js";
@@ -26,6 +27,37 @@ async function getCart(request: Parameters<Parameters<typeof cartRouter.get>[1]>
     if (!cart && validCookieSessionId) {
       const guestCart = await prisma.cart.findFirst({ where: { sessionId: validCookieSessionId, userId: null } });
       if (guestCart) cart = await prisma.cart.update({ where: { id: guestCart.id }, data: { userId: request.customer.id } });
+    }
+    if (cart && validCookieSessionId && cart.sessionId !== validCookieSessionId) {
+      const guestCart = await prisma.cart.findFirst({ where: { sessionId: validCookieSessionId, userId: null }, include: { coupon: true } });
+      if (guestCart) {
+        cart = await prisma.$transaction(async (tx) => {
+          const guestItems = await tx.cartItem.findMany({ where: { cartId: guestCart.id }, include: { variant: true } });
+          const accountItems = await tx.cartItem.findMany({ where: { cartId: cart!.id }, include: { variant: true } });
+          const accountItemsByVariant = new Map(accountItems.filter((item) => item.variantId).map((item) => [item.variantId!, item]));
+
+          for (const guestItem of guestItems) {
+            if (!guestItem.variantId || !guestItem.variant) {
+              await tx.cartItem.delete({ where: { id: guestItem.id } });
+              continue;
+            }
+            const accountItem = accountItemsByVariant.get(guestItem.variantId);
+            if (accountItem) {
+              const quantity = Math.min(10, accountItem.quantity + guestItem.quantity, guestItem.variant.stockQty);
+              if (quantity !== accountItem.quantity) await tx.cartItem.update({ where: { id: accountItem.id }, data: { quantity } });
+              await tx.cartItem.delete({ where: { id: guestItem.id } });
+            } else if (guestItem.variant.stockQty > 0) {
+              await tx.cartItem.update({ where: { id: guestItem.id }, data: { cartId: cart!.id, quantity: Math.min(10, guestItem.quantity, guestItem.variant.stockQty) } });
+            } else {
+              await tx.cartItem.delete({ where: { id: guestItem.id } });
+            }
+          }
+
+          if (!cart!.couponId && guestCart.couponId) await tx.cart.update({ where: { id: cart!.id }, data: { couponId: guestCart.couponId } });
+          await tx.cart.delete({ where: { id: guestCart.id } });
+          return tx.cart.findUniqueOrThrow({ where: { id: cart!.id } });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      }
     }
     if (!cart) {
       const sessionId = randomBytes(32).toString("hex");

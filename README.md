@@ -14,6 +14,8 @@ This starts the Docker services, waits for them to become healthy, generates the
 
 Public menu filters: `GET /api/v1/categories` (active categories only), `GET /api/v1/spaces`, and `GET /api/v1/styles`; all are sorted by `sortOrder`, then `name`.
 
+Production deployment is documented in [docs/production-deploy.md](docs/production-deploy.md).
+
 ## Frontend
 
 The mobile-first React storefront lives in `apps/web`. It includes home discovery by room and style, catalog filters, product detail, cart, demo checkout, lighting calculator, and an API-backed consultation chat.

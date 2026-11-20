@@ -7,7 +7,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { HttpError } from "../../http/errors.js";
 import { prisma } from "../../lib/prisma.js";
-import { renderOrderEmail, renderVerificationEmail, type OrderEmailType } from "./email.templates.js";
+import { renderOrderEmail, renderVerificationEmail, type OrderEmailType, type RenderedEmail } from "./email.templates.js";
 import { createOrderTrackingToken, matchesOrderTrackingToken } from "../orders/mock-payment.js";
 
 const queueName = "send-order-emails";
@@ -52,6 +52,42 @@ export async function sendVerificationEmail(input: { email: string; name: string
   }
 }
 
+async function sendRenderedEmail(input: { to: string; rendered: RenderedEmail; idempotencyKey?: string }): Promise<string> {
+  if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) {
+    const transport = nodemailer.createTransport({
+      host: "smtp.gmail.com", port: 465, secure: true,
+      auth: { user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD },
+      connectionTimeout: 15_000, greetingTimeout: 10_000, socketTimeout: 15_000,
+    });
+    const sent = await transport.sendMail({ from: { name: "Konyappi Shop", address: env.GMAIL_USER }, to: input.to, ...input.rendered });
+    return typeof sent.messageId === "string" ? sent.messageId : "smtp";
+  }
+  if (env.RESEND_API_KEY) {
+    const result = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+        ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {}),
+      },
+      body: JSON.stringify({ from: env.EMAIL_FROM, to: [input.to], subject: input.rendered.subject, html: input.rendered.html, text: input.rendered.text }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const response = await result.json().catch(() => ({})) as { id?: unknown };
+    if (!result.ok || typeof response.id !== "string") throw new Error(`Resend request failed with HTTP ${result.status}`);
+    return response.id;
+  }
+  if (env.NODE_ENV === "development" || env.NODE_ENV === "test") {
+    const transport = nodemailer.createTransport({
+      host: env.MAILPIT_SMTP_HOST, port: env.MAILPIT_SMTP_PORT, secure: false,
+      connectionTimeout: 5_000, greetingTimeout: 5_000, socketTimeout: 5_000,
+    });
+    const sent = await transport.sendMail({ from: env.EMAIL_FROM, to: input.to, ...input.rendered });
+    return typeof sent.messageId === "string" ? sent.messageId : "mailpit";
+  }
+  throw new Error("No transactional email provider is configured");
+}
+
 export function hashEmailAddress(email: string): string {
   return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
 }
@@ -80,12 +116,6 @@ async function deliverEmail(logId: string): Promise<void> {
   });
   if (!log || log.status === "SENT" || log.status === "SKIPPED") return;
 
-  if (!env.RESEND_API_KEY) {
-    await prisma.emailLog.update({ where: { id: logId }, data: { status: "SKIPPED", error: "RESEND_API_KEY is not configured" } });
-    logger.info({ emailLogId: logId, type: log.type }, "Email skipped because Resend is not configured");
-    return;
-  }
-
   const type = emailTypeSchema.parse(log.type);
   await prisma.emailLog.update({ where: { id: logId }, data: { status: "SENDING", error: null } });
   try {
@@ -94,19 +124,8 @@ async function deliverEmail(logId: string): Promise<void> {
       ? `${env.APP_BASE_URL.replace(/\/$/, "")}/orders/track?code=${encodeURIComponent(log.order.code)}#token=${encodeURIComponent(tracking.token)}`
       : null;
     const rendered = renderOrderEmail(type, { ...log.order, trackingUrl });
-    const result = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": log.id,
-      },
-      body: JSON.stringify({ from: env.EMAIL_FROM, to: [log.order.email], subject: rendered.subject, html: rendered.html, text: rendered.text }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const response = await result.json().catch(() => ({})) as { id?: unknown };
-    if (!result.ok || typeof response.id !== "string") throw new Error(`Resend request failed with HTTP ${result.status}`);
-    await prisma.emailLog.update({ where: { id: logId }, data: { status: "SENT", providerId: response.id, error: null } });
+    const providerId = await sendRenderedEmail({ to: log.order.email, rendered, idempotencyKey: log.id });
+    await prisma.emailLog.update({ where: { id: logId }, data: { status: "SENT", providerId, error: null } });
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 2000) : "Unknown email delivery error";
     await prisma.emailLog.update({ where: { id: logId }, data: { status: "FAILED", error: message } });

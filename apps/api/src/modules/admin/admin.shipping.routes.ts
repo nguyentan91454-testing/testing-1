@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { HttpError } from "../../http/errors.js";
+import { env } from "../../config/env.js";
 import { prisma } from "../../lib/prisma.js";
 import { recordAdminChange } from "./admin-audit.js";
 import { assertOrderTransition } from "../orders/order-state.js";
@@ -9,6 +10,10 @@ import { notifyEmailWorker, recordOrderEmail } from "../email/email.service.js";
 import { createMockShipment } from "../shipping/mock-shipping.js";
 
 export const adminShippingRouter = Router();
+const shippingInputSchema = z.object({
+  provider: z.string().trim().min(2).max(40).optional(),
+  trackingCode: z.string().trim().min(2).max(120).optional(),
+}).strict();
 
 adminShippingRouter.get("/orders/:orderId/shipment", async (request, response, next) => {
   try {
@@ -25,7 +30,10 @@ adminShippingRouter.get("/orders/:orderId/shipment", async (request, response, n
 adminShippingRouter.post("/orders/:orderId/shipment", async (request, response, next) => {
   try {
     const { orderId } = z.object({ orderId: z.string().uuid() }).parse(request.params);
-    z.object({}).strict().parse(request.body ?? {});
+    const input = shippingInputSchema.parse(request.body ?? {});
+    if (env.NODE_ENV === "production" && (!input.provider || !input.trackingCode)) {
+      throw new HttpError(400, "Production requires the carrier name and tracking code before shipping an order", "SHIPPING_DETAILS_REQUIRED");
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
@@ -62,11 +70,20 @@ adminShippingRouter.post("/orders/:orderId/shipment", async (request, response, 
       });
       if (changed.count !== 1) throw new HttpError(409, "Order changed concurrently; reload and retry", "ORDER_CHANGED_CONCURRENTLY");
 
-      const label = createMockShipment({
-        orderCode: order.code,
-        shippingFeeGrossVnd: order.shippingFeeGrossVnd,
-        codAmountVnd: order.codAmountVnd,
-      });
+      const label = env.NODE_ENV === "production"
+        ? {
+            provider: input.provider!,
+            trackingCode: input.trackingCode!,
+            status: "CREATED",
+            feeGrossVnd: order.shippingFeeGrossVnd,
+            codAmountVnd: order.codAmountVnd,
+            rawPayload: { manual: true, orderCode: order.code, createdAt: new Date().toISOString() },
+          }
+        : createMockShipment({
+            orderCode: order.code,
+            shippingFeeGrossVnd: order.shippingFeeGrossVnd,
+            codAmountVnd: order.codAmountVnd,
+          });
       const shipment = await tx.shipment.create({ data: { orderId, ...label } });
       await tx.orderEvent.create({
         data: {

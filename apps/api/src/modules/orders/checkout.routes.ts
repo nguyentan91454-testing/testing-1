@@ -170,22 +170,26 @@ const checkoutPolicySchema = z.object({
 type CheckoutLine = { variantId: string; sku: string; productName: string; variantName: string | null; priceVnd: number; quantity: number };
 
 const cartCookie = "cart_session";
+const mockPaymentsEnabled = env.NODE_ENV !== "production" || env.ALLOW_MOCK_PAYMENTS === "true";
 const normalizePhone = (value: string) => {
   const compact = value.replace(/[\s()-]/g, "");
   const normalized = compact.startsWith("+84") ? `0${compact.slice(3)}` : compact;
   if (!/^0\d{9,10}$/.test(normalized)) throw new HttpError(400, "Số điện thoại Việt Nam không hợp lệ", "INVALID_PHONE");
   return normalized;
 };
-const orderCode = () => `DEMO-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
+const orderCode = () => `${env.NODE_ENV === "production" ? "ORDER" : "DEMO"}-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
 
 checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
   try {
     const input = checkoutSchema.parse(request.body);
+    if (input.paymentMethod === "VIETQR" && !mockPaymentsEnabled) {
+      throw new HttpError(503, "Thanh toán trực tuyến chưa được cấu hình. Vui lòng chọn thanh toán khi nhận hàng.", "PAYMENT_PROVIDER_UNAVAILABLE");
+    }
     const idempotencyKey = z.string().uuid().parse(request.get("idempotency-key"));
     const sessionId = request.cookies?.[cartCookie] as string | undefined;
     if (!request.customer && (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId))) throw new HttpError(400, "Giỏ hàng không hợp lệ", "CART_SESSION_REQUIRED");
 
-    const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paymentStatus: true, orderStatus: true, createdAt: true, trackingTokenHash: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
+    const previous = await prisma.order.findUnique({ where: { idempotencyKey }, select: { id: true, code: true, totalVnd: true, paidVnd: true, codAmountVnd: true, depositRequiredVnd: true, paymentStatus: true, orderStatus: true, isDemo: true, createdAt: true, trackingTokenHash: true, payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, type: true, amountVnd: true, status: true } } } });
     if (previous) {
       const tracking = existingTrackingToken(previous);
       Object.assign(previous, { payment: checkoutPayment(previous.code, previous.payments[0] ?? null), trackingToken: tracking?.token ?? null, trackingExpiresAt: tracking?.expiresAt ?? null });
@@ -266,6 +270,9 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
       } else if (totalVnd >= policy.fullCodLimitVnd) {
         requiredPaymentVnd = Number((BigInt(totalVnd) * BigInt(policy.depositRatePercent)) / 100n);
       }
+      if (requiredPaymentVnd > 0 && !mockPaymentsEnabled) {
+        throw new HttpError(503, "Đơn hàng này cần thanh toán trước nhưng cổng thanh toán chưa được cấu hình.", "PAYMENT_PROVIDER_UNAVAILABLE");
+      }
       if (input.paymentMethod === "COD" && requiredPaymentVnd === totalVnd && totalVnd > 0) {
         throw new HttpError(400, "Đơn này cần thanh toán trước qua VietQR", "PREPAYMENT_REQUIRED");
       }
@@ -305,7 +312,7 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
           orderStatus: "PENDING",
           paymentStatus: requiredPaymentVnd > 0 ? "DEPOSIT_PENDING" : "COD_PENDING",
           reservationExpiresAt: requiredPaymentVnd > 0 ? new Date(Date.now() + 30 * 60_000) : null,
-          isDemo: true,
+          isDemo: env.NODE_ENV !== "production",
           ...(input.note === undefined ? {} : { note: input.note }),
         },
       });
@@ -352,8 +359,8 @@ checkoutRouter.post("/", optionalCustomer, async (request, response, next) => {
     await notifyEmailWorker(order.emailLogId);
     response.status(201).json({
       success: true,
-      data: { id: createdOrder.id, code: createdOrder.code, totalVnd: createdOrder.totalVnd, paymentStatus: createdOrder.paymentStatus, orderStatus: createdOrder.orderStatus, codAmountVnd: createdOrder.codAmountVnd, depositRequiredVnd: createdOrder.depositRequiredVnd, payment: checkoutPayment(createdOrder.code, createdPayment), trackingToken: order.tracking.token, trackingExpiresAt: order.tracking.expiresAt, isDemo: true },
-      message: "Đơn hàng demo đã được tạo",
+      data: { id: createdOrder.id, code: createdOrder.code, totalVnd: createdOrder.totalVnd, paidVnd: createdOrder.paidVnd, paymentStatus: createdOrder.paymentStatus, orderStatus: createdOrder.orderStatus, codAmountVnd: createdOrder.codAmountVnd, depositRequiredVnd: createdOrder.depositRequiredVnd, payment: checkoutPayment(createdOrder.code, createdPayment), trackingToken: order.tracking.token, trackingExpiresAt: order.tracking.expiresAt, isDemo: createdOrder.isDemo },
+      message: "Đơn hàng đã được tạo",
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

@@ -32,8 +32,16 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
-if (env.NODE_ENV === "production" && (env.JWT_ACCESS_SECRET.startsWith("development-only") || env.JWT_ACCESS_SECRET.startsWith("replace-with-"))) {
-  throw new Error("JWT_ACCESS_SECRET must be configured for production");
+if (env.NODE_ENV === "production") {
+  const invalidProductionSettings = [
+    env.JWT_ACCESS_SECRET.startsWith("development-only") || env.JWT_ACCESS_SECRET.startsWith("replace-with-") ? "JWT_ACCESS_SECRET" : null,
+    env.ADMIN_BOOTSTRAP_PASSWORD === "change-me-before-use" ? "ADMIN_BOOTSTRAP_PASSWORD" : null,
+    env.APP_BASE_URL.startsWith("https://") ? null : "APP_BASE_URL must use HTTPS",
+    env.API_BASE_URL.startsWith("https://") ? null : "API_BASE_URL must use HTTPS",
+    env.API_CORS_ORIGINS.split(",").some((origin) => origin.trim().startsWith("http://localhost")) ? "API_CORS_ORIGINS" : null,
+    env.RESEND_API_KEY || env.GMAIL_USER ? null : "RESEND_API_KEY or Gmail SMTP",
+  ].filter((value): value is string => value !== null);
+  if (invalidProductionSettings.length > 0) throw new Error(`Production environment is not configured: ${invalidProductionSettings.join(", ")}`);
 }
 export const corsOrigins = env.API_CORS_ORIGINS.split(",").map((origin) => origin.trim());
 
